@@ -384,7 +384,7 @@ svg.canvas{width:100%;height:100%;display:block}
 // ═══════════════════════════════════════════════════════════
 const NODE_DEFAULTS = {
   agent: { w: 200, h: 64, color: '#3b82f6', icon: '\u{1F916}', label: 'Agent',
-    config: { agentType: 'general', model: 'sonnet', tools: ['Read','Write','Edit','Bash','Grep','Glob'], prompt: '', notes: '', maxTurns: 10 }},
+    config: { agentType: 'general', model: 'sonnet-4.6', tools: ['Read','Write','Edit','Bash','Grep','Glob'], prompt: '', notes: '', maxTurns: 10 }},
   task: { w: 180, h: 52, color: '#10b981', icon: '\u2713', label: 'Task',
     config: { description: '', acceptance: '' }},
   decision: { w: 140, h: 80, color: '#f59e0b', icon: '?', label: 'Decision',
@@ -412,14 +412,15 @@ const AGENT_TYPES = [
 
 const ALL_TOOLS = ['Read','Write','Edit','Bash','Grep','Glob','WebSearch','WebFetch','Task','LSP'];
 const MODELS = [
-  { value: 'sonnet', label: 'Sonnet 4.5 (Default)', family: 'sonnet-4.5' },
-  { value: 'sonnet-4.6', label: 'Sonnet 4.6', family: 'sonnet-4.6' },
-  { value: 'opus', label: 'Opus 4.5', family: 'opus-4.5' },
-  { value: 'opus-4.6', label: 'Opus 4.6', family: 'opus-4.6' },
-  { value: 'haiku', label: 'Haiku 4.5', family: 'haiku-4.5' }
+  { value: 'sonnet-4.6', label: 'Sonnet 4.6 (Default)', family: 'sonnet-4.6', id: 'claude-sonnet-4-6' },
+  { value: 'opus-4.6',   label: 'Opus 4.6',             family: 'opus-4.6',   id: 'claude-opus-4-6' },
+  { value: 'haiku',      label: 'Haiku 4.5',             family: 'haiku-4.5',  id: 'claude-haiku-4-5-20251001' },
+  { value: 'sonnet',     label: 'Sonnet 4.5',            family: 'sonnet-4.5', id: 'claude-sonnet-4-5-20251001' },
+  { value: 'opus',       label: 'Opus 4.5',              family: 'opus-4.5',   id: 'claude-opus-4-5-20251001' },
 ];
 function getModelLabel(val) { const m = MODELS.find(m => m.value === val); return m ? m.label : val; }
 function getModelFamily(val) { const m = MODELS.find(m => m.value === val); return m ? m.family : val; }
+function getModelId(val) { const m = MODELS.find(m => m.value === val); return m ? m.id : val; }
 
 // Maps agentType to a PROMPTS key for fallback when user leaves prompt blank
 const AGENT_TYPE_PROMPT_MAP = {
@@ -434,7 +435,7 @@ function getEffectivePrompt(node) {
   const mapped = AGENT_TYPE_PROMPT_MAP[node.config.agentType];
   if (mapped && PROMPTS[mapped]) return PROMPTS[mapped];
   // Smart fallback for general/unknown types using the node label
-  return `Complete the task: ${node.label}.\n\n1. Read and understand any input from previous steps\n2. Analyze the requirements and plan your approach\n3. Execute the work using the tools available to you\n4. Verify your output is complete and correct\n5. Document what was done and any issues encountered\n\nProvide a structured summary of your actions, key findings or changes made, and any concerns for the next step.`;
+  return `Complete the task: ${node.label}.\n\n1. Read and understand any input from previous steps\n2. Use Glob and Grep to orient yourself in the codebase before making changes\n3. Analyze the requirements and plan your approach\n4. Execute the work using the tools available to you\n5. Verify your output is complete and correct — run linter/tests if applicable\n6. Document what was done and any issues encountered\n\n## Handoff Summary\nEnd your response with:\n- **Completed**: What was accomplished\n- **Files Changed**: Specific files created or modified (with brief reason)\n- **Key Decisions**: Important choices made and why\n- **Next Step Needs**: What the next agent must know to continue effectively`;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -442,7 +443,7 @@ function getEffectivePrompt(node) {
 // ═══════════════════════════════════════════════════════════
 const PROMPTS = {
   // --- Planning & Architecture ---
-  planner: 'Analyze the requirements and create a detailed implementation plan.\n\n1. Read relevant existing code to understand current architecture and patterns\n2. Identify files to create or modify, with rationale for each\n3. Define component boundaries, interfaces, and data flow\n4. Outline a testing strategy with specific test scenarios\n5. Flag potential risks, edge cases, and dependencies\n\nOutput a structured, numbered plan that the Implementer can follow step by step.',
+  planner: 'Analyze the requirements and create a detailed implementation plan.\n\n1. Use `Glob "**/*"` to map the project structure, then read key config files (package.json, tsconfig, etc.)\n2. Use `Grep` to find existing code related to the feature — search for relevant keywords, types, and patterns\n3. Read the most relevant files to understand current architecture, conventions, and data flow\n4. Identify exactly which files to create or modify, with rationale for each\n5. Define component boundaries, interfaces, and data contracts\n6. Outline a testing strategy with specific test scenarios\n7. Flag potential risks, edge cases, and breaking changes\n\nOutput a structured, numbered plan with: file list (create/modify), implementation sequence, interface definitions, test scenarios, and risks.\n\n## Handoff Summary\nEnd your response with:\n- **Files to Create**: New files needed with purpose\n- **Files to Modify**: Existing files and what changes\n- **Interfaces Defined**: Key types/contracts the Implementer must follow\n- **Risks**: Anything the next agent should watch out for',
 
   architect: 'Design the system architecture for this feature.\n\n1. Analyze requirements and identify component boundaries\n2. Read existing codebase to understand patterns in use\n3. Design API contract: endpoints, methods, request/response shapes, status codes\n4. Define data model changes and migrations if needed\n5. Plan frontend component hierarchy and state management\n6. Document integration points between frontend and backend\n\nOutput: API specification, data model, component hierarchy, key interaction flows, and implementation sequence.',
 
@@ -502,7 +503,7 @@ const PROMPTS = {
 
   testWriter: 'Write unit and integration tests in parallel with implementation.\n\n1. Use the plan to anticipate API and component interfaces\n2. Write unit tests covering happy paths and error cases\n3. Write integration tests for component interactions\n4. Cover edge cases: null/empty inputs, boundary values, concurrent access\n5. Ensure tests are deterministic and independent\n\nReport: tests written, coverage of planned interfaces, and any assumptions that need verification once implementation completes.',
 
-  researcher: 'Research existing codebase patterns, similar implementations, and relevant documentation.\n\n1. Find existing features with similar architecture or behavior\n2. Document patterns, conventions, and abstractions already in use\n3. Identify relevant dependencies, utilities, and shared code\n4. Note any constraints, technical debt, or gotchas\n5. Check for documentation or ADRs related to the area\n\nOutput: relevant patterns found, recommended approach aligned with existing conventions, and constraints to be aware of.'
+  researcher: 'Research existing codebase patterns, similar implementations, and relevant documentation.\n\n1. Use `Glob "**/*"` to map the full project structure — identify key directories and files\n2. Use `Grep` with relevant keywords to find existing implementations of similar features\n3. Read the most relevant files to understand the patterns in use\n4. Use LSP `goToDefinition` and `findReferences` to trace how key types and functions are used\n5. Note naming conventions, file organization, import styles, and shared utilities\n6. Identify any constraints, technical debt, or gotchas that could affect the implementation\n7. Check for documentation, ADRs, or README files related to the area\n\nOutput: relevant patterns found with file references, recommended implementation approach aligned with existing conventions, and list of constraints to be aware of.\n\n## Handoff Summary\nEnd your response with:\n- **Relevant Files**: Key files the implementer should read before starting\n- **Pattern to Follow**: Specific existing pattern to replicate\n- **Shared Code Available**: Utilities/hooks/components that can be reused\n- **Constraints**: Technical debt, gotchas, or decisions to respect'
 };
 
 let state = {
@@ -879,7 +880,7 @@ function addParallelGroup(branchCount) {
   for (let i = 0; i < branchCount; i++) {
     const y = centerY - totalHeight / 2 + i * 90 - 32;
     const agent = addNode('agent', centerX, y, `Agent ${i + 1}`, {
-      agentType: 'general', model: 'sonnet',
+      agentType: 'general', model: 'sonnet-4.6',
       tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob'],
       prompt: '', notes: '', maxTurns: 10
     });
@@ -909,7 +910,7 @@ function addFanOut() {
   for (let i = 0; i < 3; i++) {
     const y = centerY - 90 + i * 90 - 32;
     const agent = addNode('agent', centerX, y, `Worker ${i + 1}`, {
-      agentType: 'general', model: 'sonnet',
+      agentType: 'general', model: 'sonnet-4.6',
       tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob'],
       prompt: '', notes: '', maxTurns: 10
     });
@@ -952,7 +953,7 @@ function addBranchToFork() {
   const avgX = children.length > 0 ? children.reduce((s, c) => s + c.x, 0) / children.length : node.x + 280;
 
   const newAgent = addNode('agent', avgX, maxY, `Agent ${children.length + 1}`, {
-    agentType: 'general', model: 'sonnet',
+    agentType: 'general', model: 'sonnet-4.6',
     tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob'],
     prompt: '', notes: '', maxTurns: 10
   });
@@ -1368,7 +1369,7 @@ function generateFromStory() {
 
   // Planner
   const planner = addNode('agent', 340, 250, 'Planner', {
-    agentType: 'planner', model: 'sonnet',
+    agentType: 'planner', model: 'sonnet-4.6',
     tools: ['Read', 'Grep', 'Glob', 'WebSearch'],
     prompt: PROMPTS.planner,
     notes: '', maxTurns: 5
@@ -1389,7 +1390,7 @@ function generateFromStory() {
   if (hasBugFix) {
     // Bug fix workflow
     const investigator = addNode('agent', 620, 250, 'Investigator', {
-      agentType: 'debugger', model: 'sonnet',
+      agentType: 'debugger', model: 'sonnet-4.6',
       tools: ['Read', 'Grep', 'Glob', 'Bash', 'LSP'],
       prompt: PROMPTS.investigator,
       maxTurns: 15
@@ -1397,7 +1398,7 @@ function generateFromStory() {
     addConnection(planner.id, investigator.id);
 
     const fixer = addNode('agent', 900, 250, 'Fixer', {
-      agentType: 'coder', model: 'sonnet',
+      agentType: 'coder', model: 'sonnet-4.6',
       tools: ['Read', 'Write', 'Edit', 'Bash'],
       prompt: PROMPTS.fixer,
       maxTurns: 10
@@ -1410,7 +1411,7 @@ function generateFromStory() {
     addConnection(planner.id, fork.id);
 
     const backend = addNode('agent', 920, 170, 'Backend Dev', {
-      agentType: 'backend', model: 'sonnet',
+      agentType: 'backend', model: 'sonnet-4.6',
       tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep'],
       prompt: PROMPTS.backend,
       notes: '', maxTurns: 15
@@ -1418,7 +1419,7 @@ function generateFromStory() {
     addConnection(fork.id, backend.id);
 
     const frontend = addNode('agent', 920, 320, 'Frontend Dev', {
-      agentType: 'frontend', model: 'sonnet',
+      agentType: 'frontend', model: 'sonnet-4.6',
       tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep'],
       prompt: PROMPTS.frontend,
       notes: '', maxTurns: 15
@@ -1428,7 +1429,7 @@ function generateFromStory() {
     // Add test agent in parallel if tests mentioned
     if (hasTest) {
       const testWriter = addNode('agent', 920, 470, 'Test Writer', {
-        agentType: 'tester', model: 'sonnet',
+        agentType: 'tester', model: 'sonnet-4.6',
         tools: ['Read', 'Write', 'Edit', 'Bash'],
         prompt: PROMPTS.testWriter,
         notes: '', maxTurns: 10
@@ -1445,7 +1446,7 @@ function generateFromStory() {
     addConnection(planner.id, fork.id);
 
     const researcher = addNode('agent', 920, 170, 'Researcher', {
-      agentType: 'researcher', model: 'sonnet',
+      agentType: 'researcher', model: 'sonnet-4.6',
       tools: ['Read', 'Grep', 'Glob', 'WebSearch'],
       prompt: PROMPTS.researcher,
       notes: '', maxTurns: 10
@@ -1453,7 +1454,7 @@ function generateFromStory() {
     addConnection(fork.id, researcher.id);
 
     const implAgent = addNode('agent', 920, 320, hasUI ? 'Frontend Dev' : hasAPI ? 'Backend Dev' : 'Implementer', {
-      agentType, model: 'sonnet',
+      agentType, model: 'sonnet-4.6',
       tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob'],
       prompt: PROMPTS.implementer,
       notes: '', maxTurns: 15
@@ -1466,7 +1467,7 @@ function generateFromStory() {
   if (hasSecurity) {
     const secX = lastNodes[0].x + 280;
     const secReview = addNode('agent', secX, lastNodes.length > 1 ? 245 : 250, 'Security Review', {
-      agentType: 'reviewer', model: 'sonnet',
+      agentType: 'reviewer', model: 'sonnet-4.6',
       tools: ['Read', 'Grep', 'Glob'],
       prompt: PROMPTS.securityReview,
       maxTurns: 5
@@ -1478,7 +1479,7 @@ function generateFromStory() {
   // Code review
   const reviewX = lastNodes[0].x + 280;
   const reviewer = addNode('agent', reviewX, lastNodes.length > 1 ? 245 : 250, 'Code Review', {
-    agentType: 'reviewer', model: 'sonnet',
+    agentType: 'reviewer', model: 'sonnet-4.6',
     tools: ['Read', 'Grep', 'Glob'],
     prompt: PROMPTS.reviewer,
     maxTurns: 5
@@ -1494,7 +1495,7 @@ function generateFromStory() {
   // Testing
   if (hasTest || true) { // always include testing
     const tester = addNode('agent', decision.x + 280, decision.y + 8, 'Tester', {
-      agentType: 'tester', model: 'sonnet',
+      agentType: 'tester', model: 'sonnet-4.6',
       tools: ['Read', 'Write', 'Edit', 'Bash'],
       prompt: PROMPTS.tester,
       maxTurns: 10
@@ -1519,19 +1520,19 @@ function loadPreset(preset) {
   const presets = {
     feature: () => {
       const i = addNode('input', 80, 250, 'Requirements');
-      const p = addNode('agent', 340, 250, 'Planner', { agentType:'planner', model:'sonnet', tools:['Read','Grep','Glob'], prompt:PROMPTS.planner, maxTurns:5 });
-      const c = addNode('agent', 620, 250, 'Implementer', { agentType:'coder', model:'sonnet', tools:['Read','Write','Edit','Bash','Grep','Glob'], prompt:PROMPTS.implementer, maxTurns:15 });
-      const r = addNode('agent', 900, 250, 'Reviewer', { agentType:'reviewer', model:'sonnet', tools:['Read','Grep'], prompt:PROMPTS.reviewer, maxTurns:5 });
-      const t = addNode('agent', 1180, 250, 'Tester', { agentType:'tester', model:'sonnet', tools:['Read','Write','Bash'], prompt:PROMPTS.tester, maxTurns:10 });
+      const p = addNode('agent', 340, 250, 'Planner', { agentType:'planner', model:'sonnet-4.6', tools:['Read','Grep','Glob'], prompt:PROMPTS.planner, maxTurns:5 });
+      const c = addNode('agent', 620, 250, 'Implementer', { agentType:'coder', model:'sonnet-4.6', tools:['Read','Write','Edit','Bash','Grep','Glob'], prompt:PROMPTS.implementer, maxTurns:15 });
+      const r = addNode('agent', 900, 250, 'Reviewer', { agentType:'reviewer', model:'sonnet-4.6', tools:['Read','Grep'], prompt:PROMPTS.reviewer, maxTurns:5 });
+      const t = addNode('agent', 1180, 250, 'Tester', { agentType:'tester', model:'sonnet-4.6', tools:['Read','Write','Bash'], prompt:PROMPTS.tester, maxTurns:10 });
       const o = addNode('output', 1460, 250, 'PR Ready', { deliverable:'Tested feature', format:'pr' });
       addConnection(i.id, p.id); addConnection(p.id, c.id); addConnection(c.id, r.id);
       addConnection(r.id, t.id); addConnection(t.id, o.id);
     },
     bugfix: () => {
       const i = addNode('input', 80, 250, 'Bug Report');
-      const inv = addNode('agent', 340, 250, 'Investigator', { agentType:'debugger', model:'sonnet', tools:['Read','Grep','Glob','Bash','LSP'], prompt:PROMPTS.investigator, maxTurns:15 });
-      const f = addNode('agent', 620, 250, 'Fixer', { agentType:'coder', model:'sonnet', tools:['Read','Write','Edit','Bash'], prompt:PROMPTS.fixer, maxTurns:10 });
-      const t = addNode('agent', 900, 250, 'Tester', { agentType:'tester', model:'sonnet', tools:['Read','Write','Bash'], prompt:PROMPTS.bugTester, maxTurns:10 });
+      const inv = addNode('agent', 340, 250, 'Investigator', { agentType:'debugger', model:'sonnet-4.6', tools:['Read','Grep','Glob','Bash','LSP'], prompt:PROMPTS.investigator, maxTurns:15 });
+      const f = addNode('agent', 620, 250, 'Fixer', { agentType:'coder', model:'sonnet-4.6', tools:['Read','Write','Edit','Bash'], prompt:PROMPTS.fixer, maxTurns:10 });
+      const t = addNode('agent', 900, 250, 'Tester', { agentType:'tester', model:'sonnet-4.6', tools:['Read','Write','Bash'], prompt:PROMPTS.bugTester, maxTurns:10 });
       const d = addNode('decision', 1180, 242, 'Fix Verified?', { condition:'Tests pass and bug is fixed', yesLabel:'Verified', noLabel:'Failed' });
       const o = addNode('output', 1460, 250, 'Fix Complete', { deliverable:'Bug fix with regression test', format:'pr' });
       addConnection(i.id, inv.id); addConnection(inv.id, f.id); addConnection(f.id, t.id);
@@ -1539,12 +1540,12 @@ function loadPreset(preset) {
     },
     fullstack: () => {
       const i = addNode('input', 80, 280, 'Feature Spec');
-      const arch = addNode('agent', 340, 280, 'Architect', { agentType:'architect', model:'sonnet', tools:['Read','Grep','Glob'], prompt:PROMPTS.architect, maxTurns:5 });
+      const arch = addNode('agent', 340, 280, 'Architect', { agentType:'architect', model:'sonnet-4.6', tools:['Read','Grep','Glob'], prompt:PROMPTS.architect, maxTurns:5 });
       const fork = addNode('parallel', 620, 276, 'Parallel Dev', { strategy:'all' });
-      const be = addNode('agent', 920, 180, 'Backend', { agentType:'backend', model:'sonnet', tools:['Read','Write','Edit','Bash','Grep'], prompt:PROMPTS.backend, maxTurns:15 });
-      const fe = addNode('agent', 920, 370, 'Frontend', { agentType:'frontend', model:'sonnet', tools:['Read','Write','Edit','Bash','Grep'], prompt:PROMPTS.frontend, maxTurns:15 });
-      const r = addNode('agent', 1200, 280, 'Reviewer', { agentType:'reviewer', model:'sonnet', tools:['Read','Grep'], prompt:PROMPTS.fullstackReviewer, maxTurns:5 });
-      const t = addNode('agent', 1480, 280, 'Tester', { agentType:'tester', model:'sonnet', tools:['Read','Write','Bash'], prompt:PROMPTS.e2eTester, maxTurns:10 });
+      const be = addNode('agent', 920, 180, 'Backend', { agentType:'backend', model:'sonnet-4.6', tools:['Read','Write','Edit','Bash','Grep'], prompt:PROMPTS.backend, maxTurns:15 });
+      const fe = addNode('agent', 920, 370, 'Frontend', { agentType:'frontend', model:'sonnet-4.6', tools:['Read','Write','Edit','Bash','Grep'], prompt:PROMPTS.frontend, maxTurns:15 });
+      const r = addNode('agent', 1200, 280, 'Reviewer', { agentType:'reviewer', model:'sonnet-4.6', tools:['Read','Grep'], prompt:PROMPTS.fullstackReviewer, maxTurns:5 });
+      const t = addNode('agent', 1480, 280, 'Tester', { agentType:'tester', model:'sonnet-4.6', tools:['Read','Write','Bash'], prompt:PROMPTS.e2eTester, maxTurns:10 });
       const o = addNode('output', 1760, 280, 'Deploy Ready', { deliverable:'Full stack feature', format:'pr' });
       addConnection(i.id, arch.id); addConnection(arch.id, fork.id);
       addConnection(fork.id, be.id); addConnection(fork.id, fe.id);
@@ -1553,10 +1554,10 @@ function loadPreset(preset) {
     },
     review: () => {
       const i = addNode('input', 80, 250, 'Code / PR');
-      const a = addNode('agent', 340, 250, 'Analyzer', { agentType:'researcher', model:'sonnet', tools:['Read','Grep','Glob','LSP'], prompt:PROMPTS.codeAnalyzer, maxTurns:10 });
-      const r = addNode('agent', 620, 250, 'Reviewer', { agentType:'reviewer', model:'sonnet', tools:['Read','Grep'], prompt:PROMPTS.codeReviewer, maxTurns:10 });
-      const im = addNode('agent', 900, 250, 'Improver', { agentType:'coder', model:'sonnet', tools:['Read','Write','Edit'], prompt:PROMPTS.improver, maxTurns:10 });
-      const v = addNode('agent', 1180, 250, 'Validator', { agentType:'tester', model:'sonnet', tools:['Read','Bash'], prompt:PROMPTS.validator, maxTurns:5 });
+      const a = addNode('agent', 340, 250, 'Analyzer', { agentType:'researcher', model:'sonnet-4.6', tools:['Read','Grep','Glob','LSP'], prompt:PROMPTS.codeAnalyzer, maxTurns:10 });
+      const r = addNode('agent', 620, 250, 'Reviewer', { agentType:'reviewer', model:'sonnet-4.6', tools:['Read','Grep'], prompt:PROMPTS.codeReviewer, maxTurns:10 });
+      const im = addNode('agent', 900, 250, 'Improver', { agentType:'coder', model:'sonnet-4.6', tools:['Read','Write','Edit'], prompt:PROMPTS.improver, maxTurns:10 });
+      const v = addNode('agent', 1180, 250, 'Validator', { agentType:'tester', model:'sonnet-4.6', tools:['Read','Bash'], prompt:PROMPTS.validator, maxTurns:5 });
       const o = addNode('output', 1460, 250, 'Improved Code', { deliverable:'Reviewed and improved code', format:'code' });
       addConnection(i.id, a.id); addConnection(a.id, r.id); addConnection(r.id, im.id);
       addConnection(im.id, v.id); addConnection(v.id, o.id);
@@ -1565,13 +1566,13 @@ function loadPreset(preset) {
       const i = addNode('input', 80, 280, 'Research Topic');
       const fork = addNode('parallel', 340, 276, 'Parallel Research', { strategy:'all' });
       addConnection(i.id, fork.id);
-      const r1 = addNode('agent', 640, 140, 'Codebase Explorer', { agentType:'researcher', model:'sonnet', tools:['Read','Grep','Glob','LSP'], prompt:PROMPTS.codebaseExplorer, notes:'', maxTurns:15 });
-      const r2 = addNode('agent', 640, 280, 'Doc Researcher', { agentType:'researcher', model:'sonnet', tools:['Read','WebSearch','WebFetch'], prompt:PROMPTS.docResearcher, notes:'', maxTurns:10 });
-      const r3 = addNode('agent', 640, 420, 'Pattern Analyzer', { agentType:'researcher', model:'sonnet', tools:['Read','Grep','Glob'], prompt:PROMPTS.patternAnalyzer, notes:'', maxTurns:10 });
+      const r1 = addNode('agent', 640, 140, 'Codebase Explorer', { agentType:'researcher', model:'sonnet-4.6', tools:['Read','Grep','Glob','LSP'], prompt:PROMPTS.codebaseExplorer, notes:'', maxTurns:15 });
+      const r2 = addNode('agent', 640, 280, 'Doc Researcher', { agentType:'researcher', model:'sonnet-4.6', tools:['Read','WebSearch','WebFetch'], prompt:PROMPTS.docResearcher, notes:'', maxTurns:10 });
+      const r3 = addNode('agent', 640, 420, 'Pattern Analyzer', { agentType:'researcher', model:'sonnet-4.6', tools:['Read','Grep','Glob'], prompt:PROMPTS.patternAnalyzer, notes:'', maxTurns:10 });
       addConnection(fork.id, r1.id); addConnection(fork.id, r2.id); addConnection(fork.id, r3.id);
       const join = addNode('parallel', 940, 276, 'Collect', { strategy:'all' });
       addConnection(r1.id, join.id); addConnection(r2.id, join.id); addConnection(r3.id, join.id);
-      const synth = addNode('agent', 1220, 280, 'Synthesizer', { agentType:'planner', model:'sonnet', tools:['Read','Write'], prompt:PROMPTS.synthesizer, notes:'', maxTurns:5 });
+      const synth = addNode('agent', 1220, 280, 'Synthesizer', { agentType:'planner', model:'sonnet-4.6', tools:['Read','Write'], prompt:PROMPTS.synthesizer, notes:'', maxTurns:5 });
       addConnection(join.id, synth.id);
       const o = addNode('output', 1500, 280, 'Research Report', { deliverable:'Comprehensive research report with recommendations', format:'report' });
       addConnection(synth.id, o.id);
@@ -1580,14 +1581,14 @@ function loadPreset(preset) {
       const i = addNode('input', 80, 310, 'Codebase / PR');
       const fork = addNode('parallel', 340, 306, 'Analysis Swarm', { strategy:'all' });
       addConnection(i.id, fork.id);
-      const a1 = addNode('agent', 640, 100, 'Security Auditor', { agentType:'reviewer', model:'sonnet', tools:['Read','Grep','Glob'], prompt:PROMPTS.securityAuditor, notes:'', maxTurns:10 });
-      const a2 = addNode('agent', 640, 230, 'Quality Analyst', { agentType:'reviewer', model:'sonnet', tools:['Read','Grep','Glob','LSP'], prompt:PROMPTS.qualityAnalyst, notes:'', maxTurns:10 });
-      const a3 = addNode('agent', 640, 360, 'Perf Profiler', { agentType:'reviewer', model:'sonnet', tools:['Read','Grep','Glob','Bash'], prompt:PROMPTS.perfProfiler, notes:'', maxTurns:10 });
-      const a4 = addNode('agent', 640, 490, 'Arch Reviewer', { agentType:'architect', model:'sonnet', tools:['Read','Grep','Glob'], prompt:PROMPTS.archReviewer, notes:'', maxTurns:10 });
+      const a1 = addNode('agent', 640, 100, 'Security Auditor', { agentType:'reviewer', model:'sonnet-4.6', tools:['Read','Grep','Glob'], prompt:PROMPTS.securityAuditor, notes:'', maxTurns:10 });
+      const a2 = addNode('agent', 640, 230, 'Quality Analyst', { agentType:'reviewer', model:'sonnet-4.6', tools:['Read','Grep','Glob','LSP'], prompt:PROMPTS.qualityAnalyst, notes:'', maxTurns:10 });
+      const a3 = addNode('agent', 640, 360, 'Perf Profiler', { agentType:'reviewer', model:'sonnet-4.6', tools:['Read','Grep','Glob','Bash'], prompt:PROMPTS.perfProfiler, notes:'', maxTurns:10 });
+      const a4 = addNode('agent', 640, 490, 'Arch Reviewer', { agentType:'architect', model:'sonnet-4.6', tools:['Read','Grep','Glob'], prompt:PROMPTS.archReviewer, notes:'', maxTurns:10 });
       addConnection(fork.id, a1.id); addConnection(fork.id, a2.id); addConnection(fork.id, a3.id); addConnection(fork.id, a4.id);
       const join = addNode('parallel', 940, 306, 'Aggregate', { strategy:'all' });
       addConnection(a1.id, join.id); addConnection(a2.id, join.id); addConnection(a3.id, join.id); addConnection(a4.id, join.id);
-      const report = addNode('agent', 1220, 310, 'Report Builder', { agentType:'planner', model:'sonnet', tools:['Read','Write'], prompt:PROMPTS.reportBuilder, notes:'', maxTurns:5 });
+      const report = addNode('agent', 1220, 310, 'Report Builder', { agentType:'planner', model:'sonnet-4.6', tools:['Read','Write'], prompt:PROMPTS.reportBuilder, notes:'', maxTurns:5 });
       addConnection(join.id, report.id);
       const o = addNode('output', 1500, 310, 'Audit Report', { deliverable:'Multi-dimensional code audit with prioritized findings', format:'report' });
       addConnection(report.id, o.id);
@@ -1674,10 +1675,14 @@ function genWorkflow() {
   p.push('');
   if (story) { p.push('### Requirements'); p.push(''); p.push(story); p.push(''); }
 
-  // Identify parallel groups
+  // Identify parallel groups — nodeToForkId maps each child to its specific fork
   const parallelChildren = new Set();
+  const nodeToForkId = {};
   parallels.forEach(par => {
-    state.connections.filter(c => c.from === par.id).forEach(c => parallelChildren.add(c.to));
+    state.connections.filter(c => c.from === par.id).forEach(c => {
+      parallelChildren.add(c.to);
+      nodeToForkId[c.to] = par.id;
+    });
   });
 
   if (agents.length > 0) {
@@ -1690,7 +1695,7 @@ function genWorkflow() {
       const isParallel = parallelChildren.has(node.id);
 
       if (isParallel) {
-        const siblings = agents.filter(a => parallelChildren.has(a.id));
+        const siblings = agents.filter(a => nodeToForkId[a.id] === nodeToForkId[node.id]);
         p.push(`**Step ${stepNum}: Parallel Execution**`);
         p.push('');
         p.push('Run the following agents simultaneously:');
@@ -1811,10 +1816,10 @@ function genSubAgents() {
     const isParallel = parallelChildren.has(node.id);
     const at = getAgentTypeName(node.config.agentType);
 
-    // Determine subagent_type mapping
-    let subagentType = 'general-purpose';
-    if (['coder','frontend','backend'].includes(node.config.agentType)) subagentType = 'general-purpose';
-    if (['researcher','debugger','analyzer'].includes(node.config.agentType)) subagentType = 'general-purpose';
+    const subagentType = 'general-purpose';
+    // Map internal model value to Claude Code Task tool model shorthand
+    const taskModelMap = { 'sonnet-4.6': 'sonnet', 'opus-4.6': 'opus', 'sonnet': 'sonnet', 'opus': 'opus', 'haiku': 'haiku' };
+    const taskModel = taskModelMap[node.config.model] || 'sonnet';
 
     if (isParallel) {
       p.push(`### Step ${stepNum} (PARALLEL): ${node.label}`);
@@ -1823,7 +1828,7 @@ function genSubAgents() {
     }
     p.push('');
     p.push('```');
-    p.push(`Task(subagent_type="${subagentType}", model="${node.config.model}", prompt="`);
+    p.push(`Task(subagent_type="${subagentType}", model="${taskModel}", prompt="`);
 
     // Build comprehensive sub-agent prompt
     const promptLines = [];
@@ -1960,10 +1965,14 @@ function genAgentTeams() {
   p.push('## Team Delegation Plan');
   p.push('');
 
-  // Identify parallel groups
+  // Identify parallel groups — nodeToForkId maps each child to its specific fork
   const parallelChildren = new Set();
+  const nodeToForkId = {};
   parallels.forEach(par => {
-    state.connections.filter(c => c.from === par.id).forEach(c => parallelChildren.add(c.to));
+    state.connections.filter(c => c.from === par.id).forEach(c => {
+      parallelChildren.add(c.to);
+      nodeToForkId[c.to] = par.id;
+    });
   });
 
   // Build teammate delegation details
@@ -2012,7 +2021,7 @@ function genAgentTeams() {
     const isParallel = parallelChildren.has(node.id);
 
     if (isParallel) {
-      const siblings = agents.filter(a => parallelChildren.has(a.id));
+      const siblings = agents.filter(a => nodeToForkId[a.id] === nodeToForkId[node.id]);
       p.push(`### Step ${stepNum}: Parallel Delegation`);
       p.push('');
       p.push('Spawn these teammates **simultaneously** (multiple Task calls in one message):');
@@ -2094,11 +2103,13 @@ function genAgentSDK() {
   p.push(`Agent SDK Workflow: ${name || 'AI Workflow'}`);
   p.push('');
   p.push('Generated by AI Agent Workflow Designer');
-  p.push('Requires: pip install anthropic-ai-claude-agent-sdk');
+  p.push('Structural skeleton — adapt to your orchestration library.');
+  p.push('Anthropic Python SDK: pip install anthropic');
+  p.push('Docs: https://docs.anthropic.com/en/api/overview');
   p.push('"""');
   p.push('');
   p.push('import asyncio');
-  p.push('from claude_agent_sdk import Agent, AgentConfig, tool');
+  p.push('import anthropic');
   p.push('');
 
   // Generate agent definitions
@@ -2110,8 +2121,7 @@ function genAgentSDK() {
     p.push(`# ${node.label} - ${at} Agent`);
     p.push(`${varName}_config = AgentConfig(`);
     p.push(`    name="${node.label}",`);
-    const sdkModelMap = { sonnet: 'claude-sonnet-4-5-20241022', 'sonnet-4.6': 'claude-sonnet-4-6-20260115', opus: 'claude-opus-4-5-20250918', 'opus-4.6': 'claude-opus-4-6-20260115', haiku: 'claude-haiku-4-5-20251001' };
-    p.push(`    model="${sdkModelMap[node.config.model] || node.config.model}",`);
+    p.push(`    model="${getModelId(node.config.model)}",`);
     p.push(`    max_turns=${node.config.maxTurns},`);
     p.push(`    tools=[${toolsList}],`);
 
@@ -2150,10 +2160,14 @@ function genAgentSDK() {
     p.push('');
   }
 
-  // Identify parallel groups
+  // Identify parallel groups — nodeToForkId maps each child to its specific fork
   const parallelChildren = new Set();
+  const nodeToForkId = {};
   parallels.forEach(par => {
-    state.connections.filter(c => c.from === par.id).forEach(c => parallelChildren.add(c.to));
+    state.connections.filter(c => c.from === par.id).forEach(c => {
+      parallelChildren.add(c.to);
+      nodeToForkId[c.to] = par.id;
+    });
   });
 
   let i = 0;
@@ -2164,7 +2178,7 @@ function genAgentSDK() {
     const isParallel = parallelChildren.has(node.id);
 
     if (isParallel) {
-      const siblings = agents.filter(a => parallelChildren.has(a.id));
+      const siblings = agents.filter(a => nodeToForkId[a.id] === nodeToForkId[node.id]);
       p.push('    # Parallel execution');
       const taskNames = siblings.map(s => {
         const vn = s.label.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
@@ -2229,10 +2243,14 @@ function genClaudePrompt() {
     p.push('## Workflow');
     p.push('');
 
-    // Identify parallel groups
+    // Identify parallel groups — nodeToForkId maps each child to its specific fork
     const parallelChildren = new Set();
+    const nodeToForkId = {};
     parallels.forEach(par => {
-      state.connections.filter(c => c.from === par.id).forEach(c => parallelChildren.add(c.to));
+      state.connections.filter(c => c.from === par.id).forEach(c => {
+        parallelChildren.add(c.to);
+        nodeToForkId[c.to] = par.id;
+      });
     });
 
     let stepNum = 1;
@@ -2243,7 +2261,7 @@ function genClaudePrompt() {
       const isParallel = parallelChildren.has(node.id);
 
       if (isParallel) {
-        const siblings = agents.filter(a => parallelChildren.has(a.id));
+        const siblings = agents.filter(a => nodeToForkId[a.id] === nodeToForkId[node.id]);
         p.push(`### Step ${stepNum}: Parallel Work`);
         p.push('');
         p.push('Address all of the following perspectives together:');
