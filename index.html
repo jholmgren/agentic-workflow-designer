@@ -422,6 +422,28 @@ function getModelLabel(val) { const m = MODELS.find(m => m.value === val); retur
 function getModelFamily(val) { const m = MODELS.find(m => m.value === val); return m ? m.family : val; }
 function getModelId(val) { const m = MODELS.find(m => m.value === val); return m ? m.id : val; }
 
+// ── Atlassian URL detection ──────────────────────────────────────────────────
+// Matches cloud (*.atlassian.net) and common self-hosted (jira.*, confluence.*) URLs
+function extractAtlassianUrls(text) {
+  if (!text) return [];
+  const re = /https?:\/\/[a-z0-9-]+\.atlassian\.net\/(?:browse\/[A-Z]+-\d+|jira\/[^\s"'<>)]+|wiki\/[^\s"'<>)]+|software\/[^\s"'<>)]+)|https?:\/\/(?:jira|confluence)\.[a-z0-9.-]+\/(?:browse|display|pages)\/[^\s"'<>)]+/gi;
+  return [...new Set(text.match(re) || [])];
+}
+function getWorkflowAtlassianUrls() {
+  const texts = [$('storyInput') ? $('storyInput').value : ''];
+  state.nodes.forEach(n => {
+    if (n.config) {
+      [n.config.prompt, n.config.notes, n.config.description].forEach(t => { if (t) texts.push(t); });
+    }
+  });
+  return [...new Set(texts.flatMap(t => extractAtlassianUrls(t)))];
+}
+function atlassianHint(urls) {
+  if (!urls || urls.length === 0) return null;
+  const list = urls.map(u => `  - ${u}`).join('\n');
+  return `> **Atlassian Context**: If an Atlassian MCP tool is available, use it to fetch the following URL(s) for full ticket/page details before proceeding:\n${list}`;
+}
+
 // Maps agentType to a PROMPTS key for fallback when user leaves prompt blank
 const AGENT_TYPE_PROMPT_MAP = {
   planner: 'planner', architect: 'architect', coder: 'implementer',
@@ -1674,6 +1696,8 @@ function genWorkflow() {
   p.push('## AI Agent Workflow' + (name ? ': ' + name : ''));
   p.push('');
   if (story) { p.push('### Requirements'); p.push(''); p.push(story); p.push(''); }
+  const _wfAtl = atlassianHint(getWorkflowAtlassianUrls());
+  if (_wfAtl) { p.push(_wfAtl); p.push(''); }
 
   // Identify parallel groups — nodeToForkId maps each child to its specific fork
   const parallelChildren = new Set();
@@ -1800,6 +1824,8 @@ function genSubAgents() {
     p.push(story);
     p.push('');
   }
+  const _saAtl = atlassianHint(getWorkflowAtlassianUrls());
+  if (_saAtl) { p.push(_saAtl); p.push(''); }
 
   p.push('## Execution Plan');
   p.push('');
@@ -1961,6 +1987,8 @@ function genAgentTeams() {
     p.push(story);
     p.push('');
   }
+  const _atAtl = atlassianHint(getWorkflowAtlassianUrls());
+  if (_atAtl) { p.push(_atAtl); p.push(''); }
 
   p.push('## Team Delegation Plan');
   p.push('');
@@ -2111,6 +2139,14 @@ function genAgentSDK() {
   p.push('import asyncio');
   p.push('import anthropic');
   p.push('');
+  const _sdkAtlUrls = getWorkflowAtlassianUrls();
+  if (_sdkAtlUrls.length > 0) {
+    p.push('# ── Atlassian Context ──────────────────────────────────────────────────────');
+    p.push('# If an Atlassian MCP tool is available, fetch these for full ticket details:');
+    _sdkAtlUrls.forEach(u => p.push(`#   ${u}`));
+    p.push('# ────────────────────────────────────────────────────────────────────────────');
+    p.push('');
+  }
 
   // Generate agent definitions
   agents.forEach(node => {
@@ -2238,6 +2274,8 @@ function genClaudePrompt() {
     p.push(story);
     p.push('');
   }
+  const _cpAtl = atlassianHint(getWorkflowAtlassianUrls());
+  if (_cpAtl) { p.push(_cpAtl); p.push(''); }
 
   if (agents.length > 0) {
     p.push('## Workflow');
