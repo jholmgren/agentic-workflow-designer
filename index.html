@@ -421,6 +421,22 @@ const MODELS = [
 function getModelLabel(val) { const m = MODELS.find(m => m.value === val); return m ? m.label : val; }
 function getModelFamily(val) { const m = MODELS.find(m => m.value === val); return m ? m.family : val; }
 
+// Maps agentType to a PROMPTS key for fallback when user leaves prompt blank
+const AGENT_TYPE_PROMPT_MAP = {
+  planner: 'planner', architect: 'architect', coder: 'implementer',
+  frontend: 'frontend', backend: 'backend', reviewer: 'reviewer',
+  tester: 'tester', debugger: 'investigator', researcher: 'researcher'
+};
+
+// Returns a quality prompt for any node - user prompt > agentType template > smart fallback
+function getEffectivePrompt(node) {
+  if (node.config.prompt && node.config.prompt.trim()) return node.config.prompt;
+  const mapped = AGENT_TYPE_PROMPT_MAP[node.config.agentType];
+  if (mapped && PROMPTS[mapped]) return PROMPTS[mapped];
+  // Smart fallback for general/unknown types using the node label
+  return `Complete the task: ${node.label}.\n\n1. Read and understand any input from previous steps\n2. Analyze the requirements and plan your approach\n3. Execute the work using the tools available to you\n4. Verify your output is complete and correct\n5. Document what was done and any issues encountered\n\nProvide a structured summary of your actions, key findings or changes made, and any concerns for the next step.`;
+}
+
 // ═══════════════════════════════════════════════════════════
 // PROMPT TEMPLATES - Comprehensive agent instructions
 // ═══════════════════════════════════════════════════════════
@@ -1010,6 +1026,19 @@ function updateConfig() {
       const val = el.type === 'number' ? parseInt(el.value) || 0 : el.value;
       if (key === 'label') node.label = val;
       else node.config[key] = val;
+
+      // Auto-populate prompt when agent type changes and prompt is empty
+      if (key === 'agentType' && node.type === 'agent') {
+        const promptEl = fields.querySelector('[data-key="prompt"]');
+        if (promptEl && !promptEl.value.trim()) {
+          const mapped = AGENT_TYPE_PROMPT_MAP[val];
+          if (mapped && PROMPTS[mapped]) {
+            node.config.prompt = PROMPTS[mapped];
+            promptEl.value = PROMPTS[mapped];
+          }
+        }
+      }
+
       render();
     });
   });
@@ -1671,7 +1700,7 @@ function genWorkflow() {
           p.push(`  **${s.label}** (${sAt} Agent)`);
           p.push(`  - Model: ${getModelLabel(s.config.model)}`);
           if (s.config.tools.length > 0) p.push(`  - Tools: ${s.config.tools.join(', ')}`);
-          if (s.config.prompt) p.push(`  - Instructions: ${s.config.prompt}`);
+          p.push(`  - Instructions: ${getEffectivePrompt(s)}`);
           if (s.config.notes && s.config.notes.trim()) p.push(`  - Context: ${s.config.notes.trim()}`);
           p.push('');
         });
@@ -1682,7 +1711,7 @@ function genWorkflow() {
         p.push(`**Step ${stepNum}: ${node.label}** (${at} Agent)`);
         p.push(`- Model: ${getModelLabel(node.config.model)}`);
         if (node.config.tools.length > 0) p.push(`- Tools: ${node.config.tools.join(', ')}`);
-        if (node.config.prompt) p.push(`- Instructions: ${node.config.prompt}`);
+        p.push(`- Instructions: ${getEffectivePrompt(node)}`);
         if (node.config.notes && node.config.notes.trim()) p.push(`- Additional context: ${node.config.notes.trim()}`);
         if (node.config.maxTurns) p.push(`- Max turns: ${node.config.maxTurns}`);
         if (deps.length > 0) p.push(`- Depends on: ${deps.join(', ')}`);
@@ -1804,12 +1833,10 @@ function genSubAgents() {
     }
     promptLines.push('');
 
-    // Task instructions
-    if (node.config.prompt) {
-      promptLines.push('## Your Task');
-      promptLines.push(node.config.prompt);
-      promptLines.push('');
-    }
+    // Task instructions - always present via getEffectivePrompt fallback
+    promptLines.push('## Your Task');
+    promptLines.push(getEffectivePrompt(node));
+    promptLines.push('');
 
     // Custom notes
     if (node.config.notes && node.config.notes.trim()) {
@@ -1951,15 +1978,12 @@ function genAgentTeams() {
     lines.push(`${pre}- Tools: ${node.config.tools.join(', ')}`);
     lines.push(`${pre}- Max turns: ${node.config.maxTurns}`);
 
-    // Task description - full prompt, not just label
-    if (node.config.prompt) {
-      lines.push(`${pre}- **Task**:`);
-      lines.push('');
-      node.config.prompt.split('\n').forEach(line => lines.push(`${pre}  ${line}`));
-      lines.push('');
-    } else {
-      lines.push(`${pre}- **Task**: ${node.label}`);
-    }
+    // Task description - always comprehensive via getEffectivePrompt fallback
+    const effectivePrompt = getEffectivePrompt(node);
+    lines.push(`${pre}- **Task**:`);
+    lines.push('');
+    effectivePrompt.split('\n').forEach(line => lines.push(`${pre}  ${line}`));
+    lines.push('');
 
     if (node.config.notes && node.config.notes.trim()) {
       lines.push(`${pre}- **Additional context**: ${node.config.notes.trim()}`);
@@ -2092,7 +2116,7 @@ function genAgentSDK() {
     p.push(`    tools=[${toolsList}],`);
 
     const instructions = [];
-    if (node.config.prompt) instructions.push(node.config.prompt);
+    instructions.push(getEffectivePrompt(node));
     if (node.config.notes && node.config.notes.trim()) instructions.push('Additional context: ' + node.config.notes.trim());
     // Add downstream decision awareness
     const downDec = getDownstreamDecisions(node.id);
@@ -2228,7 +2252,8 @@ function genClaudePrompt() {
           const sAt = getAgentTypeName(s.config.agentType);
           p.push(`**${s.label}** (as ${sAt}):`);
           p.push('');
-          if (s.config.prompt) { p.push(s.config.prompt); p.push(''); }
+          p.push(getEffectivePrompt(s));
+          p.push('');
           if (s.config.notes && s.config.notes.trim()) {
             p.push(`Additional context: ${s.config.notes.trim()}`);
             p.push('');
@@ -2251,7 +2276,8 @@ function genClaudePrompt() {
         p.push('');
         p.push(`**Role**: ${at}`);
         p.push('');
-        if (node.config.prompt) { p.push(node.config.prompt); p.push(''); }
+        p.push(getEffectivePrompt(node));
+        p.push('');
         if (node.config.notes && node.config.notes.trim()) {
           p.push(`**Additional context**: ${node.config.notes.trim()}`);
           p.push('');
