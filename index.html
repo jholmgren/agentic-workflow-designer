@@ -1,0 +1,2358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Agent Workflow Designer</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#334155;--surface3:#475569;
+  --border:#334155;--border2:#475569;
+  --text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  --accent:#3b82f6;--accent2:#2563eb;
+  --agent:#3b82f6;--task:#10b981;--decision:#f59e0b;
+  --parallel:#8b5cf6;--input:#06b6d4;--output:#f43f5e;
+  --radius:8px;--radius-sm:4px;
+  --font:system-ui,-apple-system,sans-serif;--mono:'SF Mono',Menlo,monospace;
+  --shadow:0 4px 24px rgba(0,0,0,.4);
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);background:var(--bg);color:var(--text);display:grid;
+  grid-template-columns:320px 1fr;grid-template-rows:1fr 260px;height:100vh}
+/* Sidebar */
+.sidebar{grid-row:1/3;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+.sidebar::-webkit-scrollbar{width:6px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:3px}
+.sidebar-section{padding:16px;border-bottom:1px solid var(--border)}
+.sidebar-section h3{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;
+  color:var(--text3);margin-bottom:10px;font-weight:600}
+.sidebar-title{padding:16px 16px 8px;display:flex;align-items:center;gap:8px;
+  border-bottom:1px solid var(--border)}
+.sidebar-title h2{font-size:14px;font-weight:700;color:var(--accent)}
+.sidebar-title .badge{font-size:10px;background:var(--accent);color:#fff;
+  padding:2px 6px;border-radius:10px;font-weight:600}
+/* Story Input */
+.story-input{width:100%;min-height:100px;background:var(--bg);border:1px solid var(--border);
+  color:var(--text);font-family:var(--mono);font-size:12px;padding:10px;
+  border-radius:var(--radius-sm);resize:vertical;line-height:1.5}
+.story-input:focus{outline:none;border-color:var(--accent)}
+.story-input::placeholder{color:var(--text3)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:7px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);
+  background:var(--surface2);color:var(--text);font-size:12px;cursor:pointer;
+  font-family:var(--font);font-weight:500;transition:all .15s;white-space:nowrap}
+.btn:hover{background:var(--surface3);border-color:var(--border2)}
+.btn.primary{background:var(--accent);border-color:var(--accent2);color:#fff}
+.btn.primary:hover{background:var(--accent2)}
+.btn.active{background:var(--accent);border-color:var(--accent);color:#fff;
+  box-shadow:0 0 0 2px rgba(59,130,246,.3)}
+.btn.sm{padding:4px 10px;font-size:11px}
+.btn.danger{border-color:#ef4444;color:#ef4444}
+.btn.danger:hover{background:#ef4444;color:#fff}
+.btn-row{display:flex;gap:6px;flex-wrap:wrap}
+.btn-row.mt{margin-top:8px}
+/* Node Palette */
+.palette-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.palette-item{display:flex;align-items:center;gap:8px;padding:8px 10px;
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);
+  cursor:pointer;transition:all .15s;font-size:12px}
+.palette-item:hover{border-color:var(--accent);transform:translateY(-1px);
+  box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.palette-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+/* Presets */
+.preset-list{display:flex;flex-direction:column;gap:4px}
+.preset-item{padding:8px 10px;background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--radius-sm);cursor:pointer;font-size:12px;transition:all .15s}
+.preset-item:hover{border-color:var(--accent);background:var(--surface2)}
+.preset-item .preset-name{font-weight:600;margin-bottom:2px}
+.preset-item .preset-desc{font-size:10px;color:var(--text3)}
+/* Node Config */
+.config-panel{display:none;flex-direction:column;gap:10px}
+.config-panel.visible{display:flex}
+.config-field label{display:block;font-size:11px;color:var(--text2);margin-bottom:4px;
+  text-transform:uppercase;letter-spacing:.5px}
+.config-field input,.config-field select,.config-field textarea{width:100%;
+  background:var(--bg);border:1px solid var(--border);color:var(--text);
+  padding:6px 8px;border-radius:var(--radius-sm);font-size:12px;font-family:var(--font)}
+.config-field textarea{font-family:var(--mono);min-height:60px;resize:vertical;line-height:1.4}
+.config-field input:focus,.config-field select:focus,.config-field textarea:focus{
+  outline:none;border-color:var(--accent)}
+.config-field select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 8px center;padding-right:24px}
+.tools-grid{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.tool-tag{font-size:10px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:12px;cursor:pointer;transition:all .12s;user-select:none}
+.tool-tag.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.tool-tag:hover{border-color:var(--accent)}
+/* Main Canvas Area */
+.main-area{display:flex;flex-direction:column;background:var(--bg);position:relative}
+.toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;
+  background:var(--surface);border-bottom:1px solid var(--border);min-height:44px;flex-shrink:0}
+.toolbar .sep{width:1px;height:20px;background:var(--border);margin:0 4px}
+.toolbar .info{font-size:11px;color:var(--text3);margin-left:auto}
+.canvas-wrap{flex:1;position:relative;overflow:hidden;cursor:default}
+.canvas-wrap.mode-connect{cursor:crosshair}
+.canvas-wrap.mode-delete{cursor:not-allowed}
+.canvas-wrap.panning{cursor:grabbing}
+svg.canvas{width:100%;height:100%;display:block}
+/* Canvas grid pattern */
+.grid-pattern{opacity:.15}
+/* Nodes */
+.node-group{cursor:grab;transition:filter .15s}
+.node-group:hover{filter:brightness(1.1)}
+.node-group.selected .node-shape{stroke:var(--accent);stroke-width:2.5;
+  filter:drop-shadow(0 0 8px rgba(59,130,246,.4))}
+.node-group.dragging{cursor:grabbing;opacity:.9}
+.node-shape{stroke:none;transition:stroke .15s,stroke-width .15s}
+.node-label{fill:var(--text);font-size:13px;font-weight:600;font-family:var(--font);
+  pointer-events:none;text-anchor:middle;dominant-baseline:central}
+.node-sublabel{fill:var(--text2);font-size:10px;font-family:var(--font);
+  pointer-events:none;text-anchor:middle;dominant-baseline:central}
+.node-badge{font-size:14px;pointer-events:none;text-anchor:middle;dominant-baseline:central}
+/* Ports */
+.port{fill:var(--surface);stroke:var(--text3);stroke-width:1.5;r:5;cursor:crosshair;
+  transition:all .15s}
+.port:hover{fill:var(--accent);stroke:var(--accent);r:7}
+/* Connections */
+.connection{fill:none;stroke:var(--text3);stroke-width:2;transition:stroke .15s}
+.connection:hover{stroke:var(--accent);cursor:pointer}
+.connection.selected{stroke:var(--accent);stroke-width:2.5}
+.conn-label{fill:var(--text3);font-size:10px;font-family:var(--font);
+  text-anchor:middle;pointer-events:none}
+.temp-connection{fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:6 4;
+  pointer-events:none;opacity:.7}
+/* Prompt Output */
+.prompt-area{background:var(--surface);border-top:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden}
+.prompt-header{display:flex;align-items:center;gap:0;
+  border-bottom:1px solid var(--border);flex-shrink:0;min-height:38px}
+.format-tabs{display:flex;align-items:stretch;flex:1;gap:0}
+.format-tab{padding:8px 14px;font-size:11px;font-weight:600;color:var(--text3);
+  cursor:pointer;border:none;background:none;font-family:var(--font);
+  border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;
+  letter-spacing:.3px}
+.format-tab:hover{color:var(--text2);background:rgba(255,255,255,.03)}
+.format-tab.active{color:var(--accent);border-bottom-color:var(--accent);
+  background:rgba(59,130,246,.05)}
+.format-tab .tab-badge{font-size:9px;padding:1px 5px;border-radius:8px;
+  background:var(--surface2);color:var(--text3);margin-left:4px;vertical-align:middle}
+.prompt-actions{display:flex;align-items:center;gap:6px;padding:0 12px;flex-shrink:0}
+.prompt-content{flex:1;overflow-y:auto;padding:12px 16px;font-family:var(--mono);
+  font-size:11px;line-height:1.6;color:var(--text2);white-space:pre-wrap;word-break:break-word}
+.prompt-content::-webkit-scrollbar{width:6px}
+.prompt-content::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:3px}
+.copied-toast{position:fixed;bottom:24px;right:24px;background:var(--accent);color:#fff;
+  padding:8px 16px;border-radius:var(--radius);font-size:12px;font-weight:600;
+  opacity:0;transform:translateY(10px);transition:all .25s;pointer-events:none;z-index:100}
+.copied-toast.show{opacity:1;transform:translateY(0)}
+/* Empty state */
+.empty-state{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;color:var(--text3);pointer-events:none}
+.empty-state .icon{font-size:48px;margin-bottom:12px;opacity:.5}
+.empty-state p{font-size:13px;text-align:center;line-height:1.6;max-width:300px}
+.empty-state kbd{background:var(--surface2);padding:2px 6px;border-radius:3px;
+  font-size:11px;font-family:var(--mono);border:1px solid var(--border)}
+/* Context menu */
+.context-menu{position:fixed;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:4px;min-width:160px;box-shadow:var(--shadow);
+  z-index:200;display:none}
+.context-menu.show{display:block}
+.context-menu-item{padding:6px 12px;font-size:12px;cursor:pointer;border-radius:3px;
+  display:flex;align-items:center;gap:8px;transition:background .1s}
+.context-menu-item:hover{background:var(--surface2)}
+.context-menu-item.danger{color:#ef4444}
+.context-menu-item.danger:hover{background:rgba(239,68,68,.15)}
+/* Minimap */
+.minimap{position:absolute;bottom:12px;right:12px;width:160px;height:100px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);
+  overflow:hidden;opacity:.7;transition:opacity .2s}
+.minimap:hover{opacity:1}
+.minimap svg{width:100%;height:100%}
+.minimap-viewport{fill:rgba(59,130,246,.15);stroke:var(--accent);stroke-width:1}
+/* Scrollbar for sidebar */
+.sidebar::-webkit-scrollbar{width:6px}
+.sidebar::-webkit-scrollbar-track{background:transparent}
+/* Note indicator */
+.note-indicator{fill:var(--accent);opacity:.9}
+.note-indicator-bg{fill:var(--surface);stroke:var(--accent);stroke-width:1}
+/* Parallel lane indicator */
+.parallel-lane{fill:rgba(139,92,246,.04);stroke:rgba(139,92,246,.2);stroke-width:1;
+  stroke-dasharray:6 3;rx:12;ry:12}
+.parallel-lane-label{fill:rgba(139,92,246,.4);font-size:10px;font-family:var(--font);
+  font-weight:600;text-transform:uppercase;letter-spacing:1px}
+/* Animations */
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+.connecting-hint{animation:pulse 1.2s infinite}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-title">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+    <h2>Workflow Designer</h2>
+    <span class="badge">AI</span>
+  </div>
+
+  <div class="sidebar-section">
+    <h3>Workflow Name</h3>
+    <input type="text" id="workflowName" class="story-input" style="min-height:auto;padding:8px 10px;font-family:var(--font);font-weight:600" placeholder="e.g. PROJ-123 User Auth Flow" oninput="updatePrompt()"/>
+  </div>
+
+  <div class="sidebar-section">
+    <h3>User Story / Jira Ticket</h3>
+    <textarea class="story-input" id="storyInput" placeholder="Paste your Jira ticket or user story here...&#10;&#10;Example:&#10;As a user, I want to reset my password via email so that I can regain access to my account.&#10;&#10;Acceptance Criteria:&#10;- User clicks 'Forgot Password'&#10;- System sends reset email&#10;- User sets new password&#10;- User can login with new password"></textarea>
+    <div class="btn-row mt">
+      <button class="btn primary" onclick="generateFromStory()">Generate Workflow</button>
+      <button class="btn sm" onclick="clearCanvas()">Clear All</button>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <h3>Add Nodes</h3>
+    <div class="palette-grid">
+      <div class="palette-item" onclick="addNode('agent')">
+        <span class="palette-dot" style="background:var(--agent)"></span>Agent
+      </div>
+      <div class="palette-item" onclick="addNode('task')">
+        <span class="palette-dot" style="background:var(--task)"></span>Task
+      </div>
+      <div class="palette-item" onclick="addNode('decision')">
+        <span class="palette-dot" style="background:var(--decision)"></span>Decision
+      </div>
+      <div class="palette-item" onclick="addNode('parallel')">
+        <span class="palette-dot" style="background:var(--parallel)"></span>Parallel
+      </div>
+      <div class="palette-item" onclick="addNode('input')">
+        <span class="palette-dot" style="background:var(--input)"></span>Input
+      </div>
+      <div class="palette-item" onclick="addNode('output')">
+        <span class="palette-dot" style="background:var(--output)"></span>Output
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3);margin-bottom:6px;font-weight:600">Quick Patterns</h3>
+      <div class="btn-row">
+        <button class="btn sm" onclick="addParallelGroup(2)" title="Fork into 2 parallel agents with a join">Fork (2)</button>
+        <button class="btn sm" onclick="addParallelGroup(3)" title="Fork into 3 parallel agents with a join">Fork (3)</button>
+        <button class="btn sm" onclick="addParallelGroup(4)" title="Fork into 4 parallel agents with a join">Fork (4)</button>
+        <button class="btn sm" onclick="addFanOut()" title="Fan-out: one input to many parallel agents, no join">Fan-Out</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <h3>Presets</h3>
+    <div class="preset-list">
+      <div class="preset-item" onclick="loadPreset('feature')">
+        <div class="preset-name">Feature Development</div>
+        <div class="preset-desc">Plan &rarr; Implement &rarr; Review &rarr; Test</div>
+      </div>
+      <div class="preset-item" onclick="loadPreset('bugfix')">
+        <div class="preset-name">Bug Fix</div>
+        <div class="preset-desc">Investigate &rarr; Fix &rarr; Test &rarr; Verify</div>
+      </div>
+      <div class="preset-item" onclick="loadPreset('fullstack')">
+        <div class="preset-name">Full Stack Feature</div>
+        <div class="preset-desc">Design &rarr; [Backend | Frontend] &rarr; Test</div>
+      </div>
+      <div class="preset-item" onclick="loadPreset('review')">
+        <div class="preset-name">Code Review</div>
+        <div class="preset-desc">Analyze &rarr; Review &rarr; Improve &rarr; Validate</div>
+      </div>
+      <div class="preset-item" onclick="loadPreset('parallel_research')">
+        <div class="preset-name">Parallel Research</div>
+        <div class="preset-desc">[Codebase | Docs | Patterns] &rarr; Synthesize</div>
+      </div>
+      <div class="preset-item" onclick="loadPreset('swarm')">
+        <div class="preset-name">Agent Swarm</div>
+        <div class="preset-desc">[Security | Quality | Perf | Arch] &rarr; Report</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar-section config-panel" id="configPanel">
+    <h3>Node Configuration</h3>
+    <div id="configFields"></div>
+    <div class="btn-row mt">
+      <button class="btn danger sm" onclick="deleteSelected()">Delete Node</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main Canvas -->
+<div class="main-area">
+  <div class="toolbar">
+    <button class="btn sm active" id="modeSelect" onclick="setMode('select')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+      Select
+    </button>
+    <button class="btn sm" id="modeConnect" onclick="setMode('connect')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      Connect
+    </button>
+    <button class="btn sm" id="modeDelete" onclick="setMode('delete')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+      Delete
+    </button>
+    <div class="sep"></div>
+    <button class="btn sm" onclick="autoLayout()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Auto Layout
+    </button>
+    <button class="btn sm" onclick="zoomFit()">Fit</button>
+    <div class="sep"></div>
+    <button class="btn sm" onclick="zoomIn()">+</button>
+    <button class="btn sm" onclick="zoomOut()">&minus;</button>
+    <span class="info" id="nodeCount"></span>
+    <div class="sep"></div>
+    <span class="info" id="zoomInfo">100%</span>
+    <span class="info" id="statusInfo"></span>
+  </div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <svg class="canvas" id="canvas">
+      <defs>
+        <pattern id="gridSmall" width="20" height="20" patternUnits="userSpaceOnUse">
+          <circle cx="10" cy="10" r=".5" fill="#475569"/>
+        </pattern>
+        <pattern id="gridLarge" width="100" height="100" patternUnits="userSpaceOnUse">
+          <rect width="100" height="100" fill="url(#gridSmall)"/>
+          <circle cx="50" cy="50" r="1" fill="#475569"/>
+        </pattern>
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0,10 3.5,0 7" fill="#64748b"/>
+        </marker>
+        <marker id="arrowhead-accent" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+          <polygon points="0 0,10 3.5,0 7" fill="#3b82f6"/>
+        </marker>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <g id="canvasGrid">
+        <rect width="10000" height="10000" x="-5000" y="-5000" fill="url(#gridLarge)" class="grid-pattern"/>
+      </g>
+      <g id="connectionsLayer"></g>
+      <g id="nodesLayer"></g>
+      <g id="tempLayer"></g>
+    </svg>
+    <div class="empty-state" id="emptyState">
+      <div class="icon">&#x1F3D7;</div>
+      <p>Paste a user story and click <strong>Generate Workflow</strong>, choose a preset, or add nodes manually.</p>
+      <p style="margin-top:12px;font-size:11px;opacity:.7">
+        <kbd>1</kbd> Select &nbsp; <kbd>2</kbd> Connect &nbsp; <kbd>3</kbd> Delete &nbsp; <kbd>Alt+Drag</kbd> Pan &nbsp; <kbd>Scroll</kbd> Zoom
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Prompt Output -->
+<div class="prompt-area">
+  <div class="prompt-header">
+    <div class="format-tabs">
+      <button class="format-tab active" data-format="prompt" onclick="setExportFormat('prompt')">Workflow</button>
+      <button class="format-tab" data-format="subagent" onclick="setExportFormat('subagent')">Sub-Agents</button>
+      <button class="format-tab" data-format="teams" onclick="setExportFormat('teams')">Agent Teams<span class="tab-badge">Preview</span></button>
+      <button class="format-tab" data-format="sdk" onclick="setExportFormat('sdk')">Agent SDK<span class="tab-badge">Python</span></button>
+      <button class="format-tab" data-format="claude" onclick="setExportFormat('claude')">Claude Prompt</button>
+    </div>
+    <div class="prompt-actions">
+      <button class="btn sm primary" onclick="copyPrompt()">Copy</button>
+    </div>
+  </div>
+  <div class="prompt-content" id="promptOutput">Design your workflow to generate an agent prompt...</div>
+</div>
+
+<!-- Context Menu -->
+<div class="context-menu" id="contextMenu">
+  <div class="context-menu-item" onclick="duplicateNode()">Duplicate</div>
+  <div class="context-menu-item" id="ctxAddBranch" style="display:none" onclick="addBranchToFork()">Add Branch</div>
+  <div class="context-menu-item" onclick="disconnectNode()">Disconnect All</div>
+  <div class="context-menu-item danger" onclick="deleteSelected()">Delete</div>
+</div>
+
+<!-- Toast -->
+<div class="copied-toast" id="toast">Copied to clipboard!</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+const NODE_DEFAULTS = {
+  agent: { w: 200, h: 64, color: '#3b82f6', icon: '\u{1F916}', label: 'Agent',
+    config: { agentType: 'general', model: 'sonnet', tools: ['Read','Write','Edit','Bash','Grep','Glob'], prompt: '', notes: '', maxTurns: 10 }},
+  task: { w: 180, h: 52, color: '#10b981', icon: '\u2713', label: 'Task',
+    config: { description: '', acceptance: '' }},
+  decision: { w: 140, h: 80, color: '#f59e0b', icon: '?', label: 'Decision',
+    config: { condition: '', yesLabel: 'Yes', noLabel: 'No' }},
+  parallel: { w: 220, h: 36, color: '#8b5cf6', icon: '\u2261', label: 'Parallel Fork',
+    config: { strategy: 'all', description: '' }},
+  input: { w: 180, h: 52, color: '#06b6d4', icon: '\u{1F4CB}', label: 'Input',
+    config: { source: 'jira', description: '' }},
+  output: { w: 180, h: 52, color: '#f43f5e', icon: '\u{1F4E6}', label: 'Output',
+    config: { deliverable: '', format: 'code' }}
+};
+
+const AGENT_TYPES = [
+  { id: 'planner', name: 'Planner', desc: 'Analyzes requirements, creates implementation plans' },
+  { id: 'architect', name: 'Architect', desc: 'Designs system architecture and component structure' },
+  { id: 'coder', name: 'Coder', desc: 'Writes and modifies code' },
+  { id: 'frontend', name: 'Frontend', desc: 'UI/UX implementation specialist' },
+  { id: 'backend', name: 'Backend', desc: 'API and server-side specialist' },
+  { id: 'reviewer', name: 'Reviewer', desc: 'Reviews code quality, security, and patterns' },
+  { id: 'tester', name: 'Tester', desc: 'Writes and runs tests' },
+  { id: 'debugger', name: 'Debugger', desc: 'Investigates and fixes bugs' },
+  { id: 'researcher', name: 'Researcher', desc: 'Explores codebase, gathers context' },
+  { id: 'general', name: 'General', desc: 'General-purpose agent' }
+];
+
+const ALL_TOOLS = ['Read','Write','Edit','Bash','Grep','Glob','WebSearch','WebFetch','Task','LSP'];
+const MODELS = [
+  { value: 'sonnet', label: 'Sonnet 4.5 (Default)', family: 'sonnet-4.5' },
+  { value: 'sonnet-4.6', label: 'Sonnet 4.6', family: 'sonnet-4.6' },
+  { value: 'opus', label: 'Opus 4.5', family: 'opus-4.5' },
+  { value: 'opus-4.6', label: 'Opus 4.6', family: 'opus-4.6' },
+  { value: 'haiku', label: 'Haiku 4.5', family: 'haiku-4.5' }
+];
+function getModelLabel(val) { const m = MODELS.find(m => m.value === val); return m ? m.label : val; }
+function getModelFamily(val) { const m = MODELS.find(m => m.value === val); return m ? m.family : val; }
+
+// ═══════════════════════════════════════════════════════════
+// PROMPT TEMPLATES - Comprehensive agent instructions
+// ═══════════════════════════════════════════════════════════
+const PROMPTS = {
+  // --- Planning & Architecture ---
+  planner: 'Analyze the requirements and create a detailed implementation plan.\n\n1. Read relevant existing code to understand current architecture and patterns\n2. Identify files to create or modify, with rationale for each\n3. Define component boundaries, interfaces, and data flow\n4. Outline a testing strategy with specific test scenarios\n5. Flag potential risks, edge cases, and dependencies\n\nOutput a structured, numbered plan that the Implementer can follow step by step.',
+
+  architect: 'Design the system architecture for this feature.\n\n1. Analyze requirements and identify component boundaries\n2. Read existing codebase to understand patterns in use\n3. Design API contract: endpoints, methods, request/response shapes, status codes\n4. Define data model changes and migrations if needed\n5. Plan frontend component hierarchy and state management\n6. Document integration points between frontend and backend\n\nOutput: API specification, data model, component hierarchy, key interaction flows, and implementation sequence.',
+
+  // --- Implementation ---
+  implementer: 'Implement the feature following the plan.\n\n1. Read each file before modifying to understand existing context\n2. Follow existing codebase patterns, naming conventions, and file organization\n3. Handle edge cases identified in the plan\n4. Add appropriate error handling and input validation\n5. Run the project linter/typecheck and fix any issues\n\nProvide a summary of all files changed with a brief description of each change.',
+
+  backend: 'Implement the backend/API changes per the design.\n\n1. Create/modify API endpoints following existing patterns\n2. Implement service layer logic with proper error handling\n3. Add data model changes and migrations if needed\n4. Follow existing auth/authorization patterns\n5. Add appropriate logging and validation\n6. Run linter and existing backend tests\n\nProvide a summary of all API changes with endpoint signatures.',
+
+  frontend: 'Implement the UI components per the design.\n\n1. Create/modify components following the existing design system\n2. Implement state management for the new feature\n3. Wire up API calls to the backend endpoints\n4. Ensure responsive design and accessibility (semantic HTML, ARIA, keyboard nav)\n5. Handle loading, error, and empty states\n6. Run linter and existing frontend tests\n\nProvide a summary of all UI changes with component hierarchy.',
+
+  // --- Investigation & Fixing ---
+  investigator: 'Investigate the reported bug systematically to find the root cause.\n\n1. Understand expected vs actual behavior from the bug report\n2. Read relevant source code and trace the execution path\n3. Check git log for recent changes that may have introduced the issue\n4. Use Grep/LSP to find related code and contributing factors\n5. Identify the ROOT CAUSE, not just the symptom\n\nOutput: reproduction steps, affected files/functions, root cause analysis, recommended fix approach, and impact assessment of related areas.',
+
+  fixer: 'Fix the bug based on the root cause analysis.\n\n1. Read the investigation report and fully understand the root cause\n2. Make the minimal, targeted fix that addresses the root cause\n3. Check related code paths for potential side effects\n4. Run existing tests to confirm no regressions\n5. Add a brief comment if the fix is non-obvious\n\nProvide: what was changed, why, files modified, and any remaining concerns.',
+
+  // --- Review ---
+  reviewer: 'Review all code changes for quality and correctness.\n\nEvaluate against:\n- Correctness: Does implementation match requirements?\n- Code quality: Naming, structure, DRY, single responsibility\n- Security: Input validation, injection prevention, data handling\n- Performance: Efficient algorithms, no unnecessary work\n- Conventions: Follows project patterns and style\n\nFor each issue, provide file:line, severity (Critical/High/Medium/Low), and fix suggestion. Output a clear PASS or NEEDS REVISION verdict.',
+
+  fullstackReviewer: 'Review all changes from Backend and Frontend for quality and correctness.\n\nEvaluate:\n- Correctness: Do changes match the design?\n- API contract: Do frontend calls match backend endpoints?\n- Security: Input validation, auth, data exposure\n- Performance: Query efficiency, render optimization\n- Conventions: Consistent patterns across frontend and backend\n\nFor each issue, provide file:line, severity, and fix suggestion. Output a PASS or NEEDS REVISION verdict.',
+
+  codeAnalyzer: 'Analyze the codebase patterns and architecture thoroughly.\n\n1. Map the dependency graph of the target code\n2. Identify design patterns in use and check consistency\n3. Evaluate adherence to SOLID principles\n4. Note code smells, complexity hotspots, and maintainability concerns\n5. Assess existing test coverage\n\nOutput: dependency map, pattern inventory, complexity hotspots, maintainability assessment, and test coverage gaps.',
+
+  codeReviewer: 'Perform a comprehensive code review across multiple dimensions.\n\nEvaluate:\n- Security: injection, XSS, CSRF, auth issues, data exposure\n- Performance: algorithm complexity, query efficiency, caching opportunities\n- Quality: error handling, edge cases, null safety, resource cleanup\n- Conventions: naming, file organization, import patterns\n\nFor each finding: severity (Critical/High/Medium/Low), location (file:line), description, and suggested fix. Output a prioritized findings list.',
+
+  improver: 'Apply the improvements identified by the Reviewer.\n\n1. Address Critical and High severity items first\n2. Read each finding context before making changes\n3. Fix root issues, not just symptoms\n4. Verify each change does not break existing functionality\n5. Run linter and tests after significant changes\n\nReport: all changes mapped to original findings, and any findings deferred with rationale.',
+
+  // --- Testing & Validation ---
+  tester: 'Write and run comprehensive tests for the changes.\n\n1. Write unit tests for new functions/methods including edge cases\n2. Write integration tests for component interactions\n3. Test both happy paths and error scenarios\n4. Verify acceptance criteria from the original requirements\n5. Run the complete existing test suite to check for regressions\n\nReport: tests written, pass/fail results, coverage of new code, regressions found. Provide a clear PASS/FAIL verdict.',
+
+  bugTester: 'Verify the bug fix and write regression tests.\n\n1. Read the investigation report and the fix summary\n2. Write a regression test that FAILS without the fix and PASSES with it\n3. Test edge cases around the fixed code area\n4. Run the full test suite to verify no regressions were introduced\n5. Confirm the original reproduction steps no longer trigger the bug\n\nOutput: VERIFIED or NOT VERIFIED verdict, regression test details, full test suite results, and confirmation the original issue is resolved.',
+
+  e2eTester: 'Write and run E2E and integration tests for the full stack feature.\n\n1. Write integration tests verifying frontend-backend interaction\n2. Write E2E tests for critical user workflows\n3. Test API endpoints independently (status codes, errors, edge cases)\n4. Test UI components in various states (loading, error, empty, populated)\n5. Run the complete test suite to verify no regressions\n\nReport: tests written, results, coverage assessment, and a PASS/FAIL verdict.',
+
+  validator: 'Validate that all improvements are correct and complete.\n\n1. Cross-reference Reviewer findings against Improver changes\n2. Verify all Critical and High items were addressed\n3. Run the full test suite - all tests must pass\n4. Run the linter - no new errors or warnings\n5. Confirm no new issues were introduced\n\nOutput: PASS/FAIL verdict, findings coverage (X of Y addressed), test results, and linter results.',
+
+  // --- Research ---
+  codebaseExplorer: 'Explore the codebase to map the current implementation.\n\n1. Map file structure and identify key modules related to the topic\n2. Trace execution paths for core functionality\n3. Document current architecture, patterns, and abstractions\n4. Identify extension points and integration boundaries\n5. Note technical debt or constraints that may affect implementation\n\nOutput: structured findings with file references, architecture overview, and key patterns discovered.',
+
+  docResearcher: 'Research official documentation, best practices, and community solutions.\n\n1. Find official framework/library documentation for relevant technologies\n2. Identify established best practices and recommended approaches\n3. Look for community solutions to similar problems\n4. Note any known pitfalls, anti-patterns, or version-specific issues\n5. Gather code examples demonstrating recommended approaches\n\nOutput: curated findings with source references, recommended approaches ranked by suitability, and pitfalls to avoid.',
+
+  patternAnalyzer: 'Analyze existing patterns and conventions in the codebase.\n\n1. Find similar features or implementations already in the codebase\n2. Document patterns and conventions used consistently\n3. Identify naming conventions, file organization, and import styles\n4. Note any deviations from established patterns\n5. Assess which patterns should be followed vs improved\n\nOutput: pattern inventory with code examples, convention guide, and recommendations for the implementation approach.',
+
+  synthesizer: 'Synthesize findings from all researchers into actionable recommendations.\n\n1. Correlate findings across codebase exploration, documentation, and pattern analysis\n2. Identify consensus and conflicts between sources\n3. Prioritize recommendations by impact and feasibility\n4. Create a clear action plan with specific steps and file references\n5. Flag risks or open questions requiring human decision\n\nOutput: executive summary, prioritized recommendations, concrete action plan, and risk register.',
+
+  // --- Audit ---
+  securityAuditor: 'Audit for security vulnerabilities across the codebase.\n\nFocus: SQL/command injection, XSS, CSRF, auth/authorization flaws, data exposure, insecure dependencies, secrets in code, OWASP Top 10.\n\nFor each finding: severity (Critical/High/Medium/Low), location (file:line), description, potential exploit scenario, and remediation steps. Output a prioritized security findings list.',
+
+  qualityAnalyst: 'Analyze code quality and maintainability.\n\nFocus: cyclomatic/cognitive complexity, code duplication (DRY), SOLID violations, test coverage gaps, dead code, inconsistent patterns, error handling completeness.\n\nFor each finding: severity, location, description, and improvement suggestion. Output a quality scorecard with prioritized findings.',
+
+  perfProfiler: 'Identify performance bottlenecks and optimization opportunities.\n\nFocus: N+1 queries, unnecessary re-renders, memory leaks, large bundle size, unoptimized algorithms, missing caching, synchronous blocking, excessive network calls.\n\nFor each finding: severity, location, estimated impact, and optimization approach. Output a performance assessment with prioritized opportunities.',
+
+  archReviewer: 'Review architecture for structural health and scalability.\n\nFocus: module coupling, cohesion, dependency direction, layer violations, circular dependencies, separation of concerns, scalability bottlenecks.\n\nFor each finding: severity, affected components, description, and recommendation. Output an architecture health report with dependency analysis.',
+
+  reportBuilder: 'Compile all analyst findings into a unified, prioritized report.\n\n1. Aggregate findings across security, quality, performance, and architecture\n2. Deduplicate overlapping findings\n3. Assign overall severity considering cross-cutting impact\n4. Create an executive summary with key health metrics\n5. Organize recommendations by priority and effort\n\nOutput: executive summary, critical findings (immediate action), high-priority improvements (next sprint), and overall health scores per dimension.',
+
+  securityReview: 'Review all changes for security vulnerabilities.\n\n1. Check for injection risks (SQL, command, XSS, template)\n2. Verify authentication and authorization logic\n3. Review data exposure and sensitive information handling\n4. Check CSRF protections and input validation\n5. Verify secure defaults and error message safety\n\nFor each finding: severity (Critical/High/Medium/Low), location (file:line), and remediation. Output a PASS/NEEDS FIX verdict.',
+
+  testWriter: 'Write unit and integration tests in parallel with implementation.\n\n1. Use the plan to anticipate API and component interfaces\n2. Write unit tests covering happy paths and error cases\n3. Write integration tests for component interactions\n4. Cover edge cases: null/empty inputs, boundary values, concurrent access\n5. Ensure tests are deterministic and independent\n\nReport: tests written, coverage of planned interfaces, and any assumptions that need verification once implementation completes.',
+
+  researcher: 'Research existing codebase patterns, similar implementations, and relevant documentation.\n\n1. Find existing features with similar architecture or behavior\n2. Document patterns, conventions, and abstractions already in use\n3. Identify relevant dependencies, utilities, and shared code\n4. Note any constraints, technical debt, or gotchas\n5. Check for documentation or ADRs related to the area\n\nOutput: relevant patterns found, recommended approach aligned with existing conventions, and constraints to be aware of.'
+};
+
+let state = {
+  nodes: [],
+  connections: [],
+  selectedId: null,
+  mode: 'select',
+  connectFrom: null,
+  pan: { x: 0, y: 0 },
+  zoom: 1,
+  nextId: 1,
+  dragging: null,
+  dragMouseStart: { x: 0, y: 0 },
+  dragNodeStart: { x: 0, y: 0 },
+  isPanning: false,
+  panStart: { x: 0, y: 0 },
+  mousePos: { x: 0, y: 0 },
+  exportFormat: 'prompt'
+};
+
+// ═══════════════════════════════════════════════════════════
+// SVG HELPERS
+// ═══════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+const svg = () => $('canvas');
+const nodesLayer = () => $('nodesLayer');
+const connsLayer = () => $('connectionsLayer');
+const tempLayer = () => $('tempLayer');
+
+function svgPoint(e) {
+  const rect = svg().getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left - state.pan.x) / state.zoom,
+    y: (e.clientY - rect.top - state.pan.y) / state.zoom
+  };
+}
+
+function updateTransform() {
+  const g = [nodesLayer(), connsLayer(), tempLayer(), $('canvasGrid')];
+  const t = `translate(${state.pan.x},${state.pan.y}) scale(${state.zoom})`;
+  g.forEach(el => el.setAttribute('transform', t));
+  $('zoomInfo').textContent = Math.round(state.zoom * 100) + '%';
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDERING
+// ═══════════════════════════════════════════════════════════
+function render() {
+  renderNodes();
+  renderConnections();
+  updatePrompt();
+  $('emptyState').style.display = state.nodes.length === 0 ? 'flex' : 'none';
+  const agents = state.nodes.filter(n => n.type === 'agent').length;
+  $('nodeCount').textContent = `${state.nodes.length} nodes \u00B7 ${state.connections.length} connections` + (agents ? ` \u00B7 ${agents} agents` : '');
+}
+
+function renderNodes() {
+  const layer = nodesLayer();
+  layer.innerHTML = '';
+  state.nodes.forEach(node => {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', `node-group${state.selectedId === node.id ? ' selected' : ''}`);
+    g.setAttribute('data-id', node.id);
+    g.setAttribute('transform', `translate(${node.x},${node.y})`);
+
+    const defaults = NODE_DEFAULTS[node.type];
+    const w = node.w, h = node.h;
+
+    // Shape
+    let shape;
+    if (node.type === 'decision') {
+      shape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      const cx = w / 2, cy = h / 2;
+      shape.setAttribute('points', `${cx},0 ${w},${cy} ${cx},${h} 0,${cy}`);
+    } else if (node.type === 'parallel') {
+      shape = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      shape.setAttribute('width', w);
+      shape.setAttribute('height', h);
+      shape.setAttribute('rx', 4);
+    } else if (node.type === 'input' || node.type === 'output') {
+      shape = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      shape.setAttribute('width', w);
+      shape.setAttribute('height', h);
+      shape.setAttribute('rx', h / 2);
+    } else {
+      shape = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      shape.setAttribute('width', w);
+      shape.setAttribute('height', h);
+      shape.setAttribute('rx', 8);
+    }
+    shape.setAttribute('fill', defaults.color + '22');
+    shape.setAttribute('stroke', defaults.color);
+    shape.setAttribute('stroke-width', '1.5');
+    shape.setAttribute('class', 'node-shape');
+    g.appendChild(shape);
+
+    // Icon
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    icon.setAttribute('x', node.type === 'decision' ? w / 2 - 40 : 16);
+    icon.setAttribute('y', h / 2);
+    icon.setAttribute('class', 'node-badge');
+    icon.textContent = defaults.icon;
+    g.appendChild(icon);
+
+    // Label
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    const lx = node.type === 'decision' ? w / 2 : w / 2 + 8;
+    label.setAttribute('x', lx);
+    label.setAttribute('y', node.type === 'agent' ? h / 2 - 7 : h / 2);
+    label.setAttribute('class', 'node-label');
+    label.textContent = truncate(node.label, 18);
+    g.appendChild(label);
+
+    // Sublabel for agents
+    if (node.type === 'agent') {
+      const sub = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      sub.setAttribute('x', lx);
+      sub.setAttribute('y', h / 2 + 10);
+      sub.setAttribute('class', 'node-sublabel');
+      const at = AGENT_TYPES.find(a => a.id === node.config.agentType);
+      sub.textContent = (at ? at.name : 'General') + ' \u00B7 ' + getModelFamily(node.config.model);
+      g.appendChild(sub);
+    }
+
+    // Notes indicator badge (top-right corner)
+    if (node.type === 'agent' && node.config.notes && node.config.notes.trim()) {
+      const bx = w - 8, by = -4, br = 8;
+      const badge = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      badge.setAttribute('cx', bx); badge.setAttribute('cy', by); badge.setAttribute('r', br);
+      badge.setAttribute('class', 'note-indicator-bg');
+      g.appendChild(badge);
+      const badgeIcon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      badgeIcon.setAttribute('x', bx); badgeIcon.setAttribute('y', by + 1);
+      badgeIcon.setAttribute('font-size', '9'); badgeIcon.setAttribute('text-anchor', 'middle');
+      badgeIcon.setAttribute('dominant-baseline', 'central');
+      badgeIcon.setAttribute('fill', '#3b82f6'); badgeIcon.setAttribute('pointer-events', 'none');
+      badgeIcon.textContent = '\u270E';
+      g.appendChild(badgeIcon);
+    }
+
+    // Ports (connection points)
+    if (node.type !== 'output') {
+      const outPort = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      outPort.setAttribute('cx', w);
+      outPort.setAttribute('cy', h / 2);
+      outPort.setAttribute('class', 'port port-out');
+      outPort.setAttribute('data-node', node.id);
+      outPort.setAttribute('data-dir', 'out');
+      g.appendChild(outPort);
+    }
+    if (node.type !== 'input') {
+      const inPort = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      inPort.setAttribute('cx', 0);
+      inPort.setAttribute('cy', h / 2);
+      inPort.setAttribute('class', 'port port-in');
+      inPort.setAttribute('data-node', node.id);
+      inPort.setAttribute('data-dir', 'in');
+      g.appendChild(inPort);
+    }
+
+    // Decision extra ports (bottom for "no")
+    if (node.type === 'decision') {
+      const noPort = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      noPort.setAttribute('cx', w / 2);
+      noPort.setAttribute('cy', h);
+      noPort.setAttribute('class', 'port port-out');
+      noPort.setAttribute('data-node', node.id);
+      noPort.setAttribute('data-dir', 'bottom');
+      g.appendChild(noPort);
+    }
+
+    layer.appendChild(g);
+  });
+}
+
+function renderParallelLanes() {
+  // Find parallel fork nodes and draw lane indicators behind their children
+  const forks = state.nodes.filter(n => n.type === 'parallel');
+  const layer = connsLayer(); // Draw before connections
+  forks.forEach(fork => {
+    const children = state.connections.filter(c => c.from === fork.id).map(c =>
+      state.nodes.find(n => n.id === c.to)
+    ).filter(Boolean);
+    if (children.length < 2) return;
+
+    // Find bounds of parallel children
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    children.forEach(c => {
+      minX = Math.min(minX, c.x);
+      minY = Math.min(minY, c.y);
+      maxX = Math.max(maxX, c.x + c.w);
+      maxY = Math.max(maxY, c.y + c.h);
+    });
+
+    const pad = 20;
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', minX - pad);
+    rect.setAttribute('y', minY - pad - 14);
+    rect.setAttribute('width', maxX - minX + pad * 2);
+    rect.setAttribute('height', maxY - minY + pad * 2 + 14);
+    rect.setAttribute('class', 'parallel-lane');
+    layer.appendChild(rect);
+
+    // Label
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', minX - pad + 8);
+    label.setAttribute('y', minY - pad - 2);
+    label.setAttribute('class', 'parallel-lane-label');
+    label.textContent = `\u2261 parallel (${fork.config.strategy || 'all'})`;
+    layer.appendChild(label);
+  });
+}
+
+function renderConnections() {
+  const layer = connsLayer();
+  layer.innerHTML = '';
+  renderParallelLanes();
+  state.connections.forEach(conn => {
+    const from = state.nodes.find(n => n.id === conn.from);
+    const to = state.nodes.find(n => n.id === conn.to);
+    if (!from || !to) return;
+
+    const pts = getConnectionPoints(from, to, conn.fromPort);
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const d = bezierPath(pts.x1, pts.y1, pts.x2, pts.y2);
+    path.setAttribute('d', d);
+    path.setAttribute('class', `connection${state.selectedId === conn.id ? ' selected' : ''}`);
+    path.setAttribute('marker-end', state.selectedId === conn.id ? 'url(#arrowhead-accent)' : 'url(#arrowhead)');
+    path.setAttribute('data-id', conn.id);
+    layer.appendChild(path);
+
+    // Label
+    if (conn.label) {
+      const mid = bezierMidpoint(pts.x1, pts.y1, pts.x2, pts.y2);
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', mid.x);
+      text.setAttribute('y', mid.y - 8);
+      text.setAttribute('class', 'conn-label');
+      text.textContent = conn.label;
+      layer.appendChild(text);
+    }
+  });
+}
+
+function getConnectionPoints(from, to, fromPort) {
+  if (fromPort === 'bottom') {
+    return {
+      x1: from.x + from.w / 2, y1: from.y + from.h,
+      x2: to.x, y2: to.y + to.h / 2
+    };
+  }
+  return {
+    x1: from.x + from.w, y1: from.y + from.h / 2,
+    x2: to.x, y2: to.y + to.h / 2
+  };
+}
+
+function bezierPath(x1, y1, x2, y2) {
+  const dx = Math.abs(x2 - x1);
+  const cp = Math.max(50, dx * 0.4);
+  return `M${x1},${y1} C${x1 + cp},${y1} ${x2 - cp},${y2} ${x2},${y2}`;
+}
+
+function bezierMidpoint(x1, y1, x2, y2) {
+  const dx = Math.abs(x2 - x1);
+  const cp = Math.max(50, dx * 0.4);
+  const t = 0.5;
+  const mt = 1 - t;
+  return {
+    x: mt*mt*mt*x1 + 3*mt*mt*t*(x1+cp) + 3*mt*t*t*(x2-cp) + t*t*t*x2,
+    y: mt*mt*mt*y1 + 3*mt*mt*t*y1 + 3*mt*t*t*y2 + t*t*t*y2
+  };
+}
+
+function truncate(s, max) { return s.length > max ? s.slice(0, max-1) + '\u2026' : s; }
+
+// ═══════════════════════════════════════════════════════════
+// NODE OPERATIONS
+// ═══════════════════════════════════════════════════════════
+function addNode(type, x, y, label, config) {
+  const d = NODE_DEFAULTS[type];
+  const canvasRect = svg().getBoundingClientRect();
+  const node = {
+    id: 'n' + state.nextId++,
+    type,
+    label: label || d.label,
+    x: x !== undefined ? x : (canvasRect.width / 2 - state.pan.x) / state.zoom - d.w / 2 + (Math.random() - 0.5) * 40,
+    y: y !== undefined ? y : (canvasRect.height / 2 - state.pan.y) / state.zoom - d.h / 2 + (Math.random() - 0.5) * 40,
+    w: d.w,
+    h: d.h,
+    config: config ? { ...d.config, ...config } : { ...d.config }
+  };
+  state.nodes.push(node);
+  selectNode(node.id, true);
+  render();
+  return node;
+}
+
+function addConnection(fromId, toId, label, fromPort) {
+  if (fromId === toId) return;
+  const exists = state.connections.find(c => c.from === fromId && c.to === toId);
+  if (exists) return;
+  const conn = {
+    id: 'c' + state.nextId++,
+    from: fromId,
+    to: toId,
+    label: label || '',
+    fromPort: fromPort || 'right'
+  };
+  state.connections.push(conn);
+  render();
+  return conn;
+}
+
+function deleteNode(id) {
+  state.nodes = state.nodes.filter(n => n.id !== id);
+  state.connections = state.connections.filter(c => c.from !== id && c.to !== id);
+  if (state.selectedId === id) state.selectedId = null;
+  render();
+  updateConfig();
+}
+
+function deleteConnection(id) {
+  state.connections = state.connections.filter(c => c.id !== id);
+  if (state.selectedId === id) state.selectedId = null;
+  render();
+}
+
+function selectNode(id, skipRender) {
+  state.selectedId = id;
+  if (!skipRender) render();
+  updateConfig();
+}
+
+function duplicateNode() {
+  const node = state.nodes.find(n => n.id === state.selectedId);
+  if (!node) return;
+  const configCopy = { ...node.config };
+  if (configCopy.tools) configCopy.tools = [...configCopy.tools];
+  addNode(node.type, node.x + 30, node.y + 30, node.label + ' (copy)', configCopy);
+  hideContextMenu();
+}
+
+function disconnectNode() {
+  if (!state.selectedId) return;
+  state.connections = state.connections.filter(c => c.from !== state.selectedId && c.to !== state.selectedId);
+  render();
+  hideContextMenu();
+}
+
+function deleteSelected() {
+  if (!state.selectedId) return;
+  const node = state.nodes.find(n => n.id === state.selectedId);
+  const conn = state.connections.find(c => c.id === state.selectedId);
+  if (node) deleteNode(state.selectedId);
+  else if (conn) deleteConnection(state.selectedId);
+  hideContextMenu();
+}
+
+// ═══════════════════════════════════════════════════════════
+// PARALLEL GROUP OPERATIONS
+// ═══════════════════════════════════════════════════════════
+function addParallelGroup(branchCount) {
+  const canvasRect = svg().getBoundingClientRect();
+  const centerX = (canvasRect.width / 2 - state.pan.x) / state.zoom;
+  const centerY = (canvasRect.height / 2 - state.pan.y) / state.zoom;
+
+  // Create fork node
+  const fork = addNode('parallel', centerX - 200, centerY - 18, 'Fork', { strategy: 'all', description: `${branchCount}-way parallel execution` });
+
+  // Create branch agents
+  const totalHeight = (branchCount - 1) * 90;
+  const agents = [];
+  for (let i = 0; i < branchCount; i++) {
+    const y = centerY - totalHeight / 2 + i * 90 - 32;
+    const agent = addNode('agent', centerX, y, `Agent ${i + 1}`, {
+      agentType: 'general', model: 'sonnet',
+      tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob'],
+      prompt: '', notes: '', maxTurns: 10
+    });
+    agents.push(agent);
+    addConnection(fork.id, agent.id);
+  }
+
+  // Create join node
+  const join = addNode('parallel', centerX + 280, centerY - 18, 'Join', { strategy: 'all', description: 'Collect results from parallel branches' });
+  agents.forEach(a => addConnection(a.id, join.id));
+
+  selectNode(fork.id, true);
+  render();
+  setTimeout(zoomFit, 80);
+}
+
+function addFanOut() {
+  const canvasRect = svg().getBoundingClientRect();
+  const centerX = (canvasRect.width / 2 - state.pan.x) / state.zoom;
+  const centerY = (canvasRect.height / 2 - state.pan.y) / state.zoom;
+
+  // Create input
+  const input = addNode('input', centerX - 300, centerY - 26, 'Source');
+
+  // Create 3 parallel agents (no join - fan-out pattern)
+  const agents = [];
+  for (let i = 0; i < 3; i++) {
+    const y = centerY - 90 + i * 90 - 32;
+    const agent = addNode('agent', centerX, y, `Worker ${i + 1}`, {
+      agentType: 'general', model: 'sonnet',
+      tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob'],
+      prompt: '', notes: '', maxTurns: 10
+    });
+    agents.push(agent);
+    addConnection(input.id, agent.id);
+  }
+
+  // Each gets its own output
+  agents.forEach((a, i) => {
+    const out = addNode('output', centerX + 280, a.y, `Output ${i + 1}`, { deliverable: '', format: 'code' });
+    addConnection(a.id, out.id);
+  });
+
+  render();
+  setTimeout(zoomFit, 80);
+}
+
+function addBranchToFork() {
+  hideContextMenu();
+  const node = state.nodes.find(n => n.id === state.selectedId);
+  if (!node || node.type !== 'parallel') return;
+
+  // Find existing branches from this fork
+  const children = state.connections.filter(c => c.from === node.id).map(c =>
+    state.nodes.find(n => n.id === c.to)
+  ).filter(Boolean);
+
+  // Find join node (a parallel node that all children connect to)
+  let joinNode = null;
+  if (children.length > 0) {
+    const childConns = state.connections.filter(c => c.from === children[0].id);
+    childConns.forEach(cc => {
+      const target = state.nodes.find(n => n.id === cc.to && n.type === 'parallel');
+      if (target) joinNode = target;
+    });
+  }
+
+  // Position new agent below the lowest existing child
+  const maxY = children.length > 0 ? Math.max(...children.map(c => c.y + c.h)) + 30 : node.y;
+  const avgX = children.length > 0 ? children.reduce((s, c) => s + c.x, 0) / children.length : node.x + 280;
+
+  const newAgent = addNode('agent', avgX, maxY, `Agent ${children.length + 1}`, {
+    agentType: 'general', model: 'sonnet',
+    tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob'],
+    prompt: '', notes: '', maxTurns: 10
+  });
+  addConnection(node.id, newAgent.id);
+  if (joinNode) addConnection(newAgent.id, joinNode.id);
+
+  selectNode(newAgent.id);
+}
+
+// ═══════════════════════════════════════════════════════════
+// CONFIGURATION PANEL
+// ═══════════════════════════════════════════════════════════
+function updateConfig() {
+  const panel = $('configPanel');
+  const fields = $('configFields');
+  const node = state.nodes.find(n => n.id === state.selectedId);
+
+  if (!node) {
+    panel.classList.remove('visible');
+    return;
+  }
+  panel.classList.add('visible');
+  fields.innerHTML = '';
+
+  // Node type badge
+  const defaults = NODE_DEFAULTS[node.type];
+  fields.innerHTML += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+    <span style="width:10px;height:10px;border-radius:50%;background:${defaults.color};flex-shrink:0"></span>
+    <span style="font-size:12px;font-weight:600;color:${defaults.color};text-transform:capitalize">${node.type} Node</span>
+  </div>`;
+
+  // Common: Label
+  fields.innerHTML += configInput('Label', 'label', node.label);
+
+  if (node.type === 'agent') {
+    fields.innerHTML += configSelect('Agent Type', 'agentType', node.config.agentType,
+      AGENT_TYPES.map(a => ({ value: a.id, label: a.name })));
+    fields.innerHTML += configSelect('Model', 'model', node.config.model,
+      MODELS.map(m => ({ value: m.value, label: m.label })));
+    fields.innerHTML += configTextarea('Agent Prompt', 'prompt', node.config.prompt,
+      'Instructions for this agent...');
+    fields.innerHTML += configTextarea('Custom Notes', 'notes', node.config.notes,
+      'Add context, constraints, or implementation details that will be included in the generated prompt...');
+    fields.innerHTML += configInput('Max Turns', 'maxTurns', node.config.maxTurns, 'number');
+    fields.innerHTML += `<div class="config-field"><label>Tools</label><div class="tools-grid" id="toolsGrid"></div></div>`;
+  } else if (node.type === 'task') {
+    fields.innerHTML += configTextarea('Description', 'description', node.config.description, 'What this task does...');
+    fields.innerHTML += configTextarea('Acceptance Criteria', 'acceptance', node.config.acceptance, 'Done when...');
+  } else if (node.type === 'decision') {
+    fields.innerHTML += configInput('Condition', 'condition', node.config.condition);
+    fields.innerHTML += configInput('Yes Label', 'yesLabel', node.config.yesLabel);
+    fields.innerHTML += configInput('No Label', 'noLabel', node.config.noLabel);
+  } else if (node.type === 'parallel') {
+    fields.innerHTML += configSelect('Strategy', 'strategy', node.config.strategy,
+      [{ value:'all', label:'Wait for All' },{ value:'any', label:'First Complete' },{ value:'race', label:'Race' }]);
+    fields.innerHTML += configTextarea('Description', 'description', node.config.description, 'Parallel execution context...');
+  } else if (node.type === 'input') {
+    fields.innerHTML += configSelect('Source', 'source', node.config.source,
+      [{ value:'jira', label:'Jira Ticket' },{ value:'story', label:'User Story' },{ value:'prd', label:'PRD' },{ value:'custom', label:'Custom' }]);
+    fields.innerHTML += configTextarea('Description', 'description', node.config.description, 'Input details...');
+  } else if (node.type === 'output') {
+    fields.innerHTML += configSelect('Format', 'format', node.config.format,
+      [{ value:'code', label:'Code Changes' },{ value:'pr', label:'Pull Request' },{ value:'report', label:'Report' },{ value:'docs', label:'Documentation' }]);
+    fields.innerHTML += configInput('Deliverable', 'deliverable', node.config.deliverable);
+  }
+
+  // Bind events
+  fields.querySelectorAll('input,select,textarea').forEach(el => {
+    el.addEventListener('input', () => {
+      const key = el.dataset.key;
+      const val = el.type === 'number' ? parseInt(el.value) || 0 : el.value;
+      if (key === 'label') node.label = val;
+      else node.config[key] = val;
+      render();
+    });
+  });
+
+  // Tools grid
+  if (node.type === 'agent') {
+    const grid = $('toolsGrid');
+    if (grid) {
+      ALL_TOOLS.forEach(tool => {
+        const tag = document.createElement('span');
+        tag.className = 'tool-tag' + (node.config.tools.includes(tool) ? ' active' : '');
+        tag.textContent = tool;
+        tag.onclick = () => {
+          const idx = node.config.tools.indexOf(tool);
+          if (idx >= 0) node.config.tools.splice(idx, 1);
+          else node.config.tools.push(tool);
+          tag.classList.toggle('active');
+          updatePrompt();
+        };
+        grid.appendChild(tag);
+      });
+    }
+  }
+}
+
+function configInput(label, key, value, type) {
+  return `<div class="config-field"><label>${label}</label>
+    <input type="${type||'text'}" data-key="${key}" value="${escHtml(String(value||''))}" /></div>`;
+}
+function configSelect(label, key, value, options) {
+  const opts = options.map(o => `<option value="${o.value}"${o.value===value?' selected':''}>${o.label}</option>`).join('');
+  return `<div class="config-field"><label>${label}</label><select data-key="${key}">${opts}</select></div>`;
+}
+function configTextarea(label, key, value, placeholder) {
+  return `<div class="config-field"><label>${label}</label>
+    <textarea data-key="${key}" placeholder="${placeholder||''}">${escHtml(value||'')}</textarea></div>`;
+}
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ═══════════════════════════════════════════════════════════
+// INTERACTION HANDLERS
+// ═══════════════════════════════════════════════════════════
+const wrap = $('canvasWrap');
+
+wrap.addEventListener('mousedown', e => {
+  hideContextMenu();
+  const pt = svgPoint(e);
+  const target = e.target.closest('.node-group');
+  const port = e.target.closest('.port');
+  const conn = e.target.closest('.connection');
+
+  // Right click → context menu
+  if (e.button === 2 && target) {
+    e.preventDefault();
+    selectNode(target.dataset.id);
+    showContextMenu(e.clientX, e.clientY);
+    return;
+  }
+
+  // Middle mouse or space+click → pan
+  if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    e.preventDefault();
+    state.isPanning = true;
+    state.panStart = { x: e.clientX - state.pan.x, y: e.clientY - state.pan.y };
+    wrap.classList.add('panning');
+    return;
+  }
+
+  if (e.button !== 0) return;
+
+  // Connect mode
+  if (state.mode === 'connect' || port) {
+    const nodeEl = port ? port.closest('.node-group') : target;
+    if (nodeEl) {
+      if (!state.connectFrom) {
+        state.connectFrom = nodeEl.dataset.id;
+        nodeEl.classList.add('connecting-hint');
+        $('statusInfo').textContent = 'Click target node...';
+      } else {
+        addConnection(state.connectFrom, nodeEl.dataset.id);
+        document.querySelector('.connecting-hint')?.classList.remove('connecting-hint');
+        state.connectFrom = null;
+        tempLayer().innerHTML = '';
+        $('statusInfo').textContent = '';
+      }
+    }
+    return;
+  }
+
+  // Delete mode
+  if (state.mode === 'delete') {
+    if (target) deleteNode(target.dataset.id);
+    else if (conn) deleteConnection(conn.dataset.id);
+    return;
+  }
+
+  // Select mode — drag or select
+  if (target) {
+    const nodeId = target.dataset.id;
+    const node = state.nodes.find(n => n.id === nodeId);
+    if (node) {
+      // Set up drag BEFORE selectNode re-renders (which destroys target element)
+      state.dragging = node;
+      state.dragMouseStart = { x: e.clientX, y: e.clientY };
+      state.dragNodeStart = { x: node.x, y: node.y };
+    }
+    selectNode(nodeId);
+  } else if (conn) {
+    state.selectedId = conn.dataset.id;
+    render();
+    updateConfig();
+  } else {
+    selectNode(null);
+  }
+});
+
+wrap.addEventListener('mousemove', e => {
+  state.mousePos = svgPoint(e);
+
+  if (state.isPanning) {
+    state.pan.x = e.clientX - state.panStart.x;
+    state.pan.y = e.clientY - state.panStart.y;
+    updateTransform();
+    return;
+  }
+
+  if (state.dragging) {
+    // Delta-based drag using screen coordinates — avoids coordinate transform bugs
+    const dx = (e.clientX - state.dragMouseStart.x) / state.zoom;
+    const dy = (e.clientY - state.dragMouseStart.y) / state.zoom;
+    state.dragging.x = state.dragNodeStart.x + dx;
+    state.dragging.y = state.dragNodeStart.y + dy;
+    // Only update this node's transform + connections — no full re-render (prevents flicker)
+    const el = nodesLayer().querySelector(`[data-id="${state.dragging.id}"]`);
+    if (el) el.setAttribute('transform', `translate(${state.dragging.x},${state.dragging.y})`);
+    renderConnections();
+    return;
+  }
+
+  // Temp connection line
+  if (state.connectFrom) {
+    const from = state.nodes.find(n => n.id === state.connectFrom);
+    if (from) {
+      const tmp = tempLayer();
+      tmp.innerHTML = '';
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const sx = from.x + from.w, sy = from.y + from.h / 2;
+      line.setAttribute('d', bezierPath(sx, sy, state.mousePos.x, state.mousePos.y));
+      line.setAttribute('class', 'temp-connection');
+      line.setAttribute('marker-end', 'url(#arrowhead-accent)');
+      tmp.appendChild(line);
+    }
+  }
+});
+
+wrap.addEventListener('mouseup', e => {
+  if (state.isPanning) {
+    state.isPanning = false;
+    wrap.classList.remove('panning');
+  }
+  if (state.dragging) {
+    state.dragging = null;
+    render(); // Clean full render after drag completes
+    updatePrompt();
+  }
+});
+
+wrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = svg().getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  const newZoom = Math.max(0.2, Math.min(3, state.zoom * delta));
+  const scale = newZoom / state.zoom;
+  state.pan.x = mx - (mx - state.pan.x) * scale;
+  state.pan.y = my - (my - state.pan.y) * scale;
+  state.zoom = newZoom;
+  updateTransform();
+}, { passive: false });
+
+wrap.addEventListener('contextmenu', e => e.preventDefault());
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected(); e.preventDefault(); }
+  if (e.key === 'Escape') {
+    state.connectFrom = null;
+    tempLayer().innerHTML = '';
+    $('statusInfo').textContent = '';
+    document.querySelector('.connecting-hint')?.classList.remove('connecting-hint');
+    setMode('select');
+  }
+  if (e.key === '1') setMode('select');
+  if (e.key === '2') setMode('connect');
+  if (e.key === '3') setMode('delete');
+});
+
+// Context menu
+function showContextMenu(x, y) {
+  const menu = $('contextMenu');
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+  // Show "Add Branch" only for parallel nodes
+  const sel = state.nodes.find(n => n.id === state.selectedId);
+  $('ctxAddBranch').style.display = (sel && sel.type === 'parallel') ? 'flex' : 'none';
+  menu.classList.add('show');
+}
+function hideContextMenu() { $('contextMenu').classList.remove('show'); }
+document.addEventListener('click', e => {
+  if (!e.target.closest('.context-menu')) hideContextMenu();
+});
+
+// ═══════════════════════════════════════════════════════════
+// MODE & ZOOM
+// ═══════════════════════════════════════════════════════════
+function setMode(mode) {
+  state.mode = mode;
+  state.connectFrom = null;
+  tempLayer().innerHTML = '';
+  $('statusInfo').textContent = '';
+  document.querySelector('.connecting-hint')?.classList.remove('connecting-hint');
+  ['modeSelect','modeConnect','modeDelete'].forEach(id => $(id).classList.remove('active'));
+  $('mode' + mode.charAt(0).toUpperCase() + mode.slice(1)).classList.add('active');
+  wrap.className = 'canvas-wrap' + (mode === 'connect' ? ' mode-connect' : mode === 'delete' ? ' mode-delete' : '');
+}
+
+function zoomIn() { state.zoom = Math.min(3, state.zoom * 1.2); updateTransform(); }
+function zoomOut() { state.zoom = Math.max(0.2, state.zoom / 1.2); updateTransform(); }
+function zoomFit() {
+  if (state.nodes.length === 0) { state.zoom = 1; state.pan = { x: 0, y: 0 }; updateTransform(); return; }
+  const bounds = getNodesBounds();
+  const rect = svg().getBoundingClientRect();
+  const pad = 80;
+  const scaleX = (rect.width - pad * 2) / (bounds.maxX - bounds.minX + 100);
+  const scaleY = (rect.height - pad * 2) / (bounds.maxY - bounds.minY + 100);
+  state.zoom = Math.max(0.3, Math.min(1.5, Math.min(scaleX, scaleY)));
+  state.pan.x = rect.width / 2 - ((bounds.minX + bounds.maxX) / 2) * state.zoom;
+  state.pan.y = rect.height / 2 - ((bounds.minY + bounds.maxY) / 2) * state.zoom;
+  updateTransform();
+}
+
+function getNodesBounds() {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  state.nodes.forEach(n => {
+    minX = Math.min(minX, n.x);
+    minY = Math.min(minY, n.y);
+    maxX = Math.max(maxX, n.x + n.w);
+    maxY = Math.max(maxY, n.y + n.h);
+  });
+  return { minX, minY, maxX, maxY };
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUTO LAYOUT
+// ═══════════════════════════════════════════════════════════
+function autoLayout() {
+  if (state.nodes.length === 0) return;
+
+  // Build adjacency for topological sort
+  const adj = {};
+  const inDeg = {};
+  state.nodes.forEach(n => { adj[n.id] = []; inDeg[n.id] = 0; });
+  state.connections.forEach(c => {
+    if (adj[c.from]) { adj[c.from].push(c.to); inDeg[c.to] = (inDeg[c.to] || 0) + 1; }
+  });
+
+  // Topological layers (BFS)
+  const layers = [];
+  let queue = state.nodes.filter(n => (inDeg[n.id] || 0) === 0).map(n => n.id);
+  const visited = new Set();
+  while (queue.length > 0) {
+    layers.push([...queue]);
+    queue.forEach(id => visited.add(id));
+    const next = [];
+    queue.forEach(id => {
+      (adj[id] || []).forEach(to => {
+        inDeg[to]--;
+        if (inDeg[to] <= 0 && !visited.has(to)) {
+          next.push(to);
+          visited.add(to);
+        }
+      });
+    });
+    queue = next;
+  }
+  // Add unvisited nodes
+  state.nodes.filter(n => !visited.has(n.id)).forEach(n => {
+    if (layers.length === 0) layers.push([]);
+    layers[layers.length - 1].push(n.id);
+  });
+
+  // Position nodes
+  const xGap = 280, yGap = 100;
+  const startX = 100;
+  layers.forEach((layer, li) => {
+    const startY = 100 - (layer.length - 1) * yGap / 2;
+    layer.forEach((nodeId, ni) => {
+      const node = state.nodes.find(n => n.id === nodeId);
+      if (node) {
+        node.x = startX + li * xGap;
+        node.y = startY + ni * yGap + 150;
+      }
+    });
+  });
+
+  render();
+  setTimeout(zoomFit, 50);
+}
+
+// ═══════════════════════════════════════════════════════════
+// STORY PARSING & WORKFLOW GENERATION
+// ═══════════════════════════════════════════════════════════
+function generateFromStory() {
+  const story = $('storyInput').value.trim();
+  if (!story) return;
+  clearCanvas();
+
+  const lower = story.toLowerCase();
+  const nodes = [];
+  const conns = [];
+
+  // Input node
+  const inp = addNode('input', 80, 250, 'User Story', { source: 'jira', description: story.slice(0, 200) });
+  nodes.push(inp);
+
+  // Planner
+  const planner = addNode('agent', 340, 250, 'Planner', {
+    agentType: 'planner', model: 'sonnet',
+    tools: ['Read', 'Grep', 'Glob', 'WebSearch'],
+    prompt: PROMPTS.planner,
+    notes: '', maxTurns: 5
+  });
+  nodes.push(planner);
+  addConnection(inp.id, planner.id);
+
+  // Detect what kind of work is needed
+  const hasUI = /\b(ui|component|page|button|form|modal|view|screen|frontend|css|style|layout|display|responsive)\b/i.test(story);
+  const hasAPI = /\b(api|endpoint|service|backend|server|database|query|rest|graphql|controller|route|migration)\b/i.test(story);
+  const hasTest = /\b(test|spec|coverage|e2e|unit test|integration test|verify|validate|qa)\b/i.test(story);
+  const hasSecurity = /\b(auth|login|password|permission|role|token|security|encrypt|credential|session)\b/i.test(story);
+  const hasBugFix = /\b(bug|fix|error|issue|broken|crash|fails|not working|regression)\b/i.test(story);
+
+  let lastNodes = [planner];
+  let yPos = 150;
+
+  if (hasBugFix) {
+    // Bug fix workflow
+    const investigator = addNode('agent', 620, 250, 'Investigator', {
+      agentType: 'debugger', model: 'sonnet',
+      tools: ['Read', 'Grep', 'Glob', 'Bash', 'LSP'],
+      prompt: PROMPTS.investigator,
+      maxTurns: 15
+    });
+    addConnection(planner.id, investigator.id);
+
+    const fixer = addNode('agent', 900, 250, 'Fixer', {
+      agentType: 'coder', model: 'sonnet',
+      tools: ['Read', 'Write', 'Edit', 'Bash'],
+      prompt: PROMPTS.fixer,
+      maxTurns: 10
+    });
+    addConnection(investigator.id, fixer.id);
+    lastNodes = [fixer];
+  } else if (hasUI && hasAPI) {
+    // Full stack: parallel branches
+    const fork = addNode('parallel', 620, 245, 'Parallel Dev', { strategy: 'all', description: 'Backend and Frontend in parallel' });
+    addConnection(planner.id, fork.id);
+
+    const backend = addNode('agent', 920, 170, 'Backend Dev', {
+      agentType: 'backend', model: 'sonnet',
+      tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep'],
+      prompt: PROMPTS.backend,
+      notes: '', maxTurns: 15
+    });
+    addConnection(fork.id, backend.id);
+
+    const frontend = addNode('agent', 920, 320, 'Frontend Dev', {
+      agentType: 'frontend', model: 'sonnet',
+      tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep'],
+      prompt: PROMPTS.frontend,
+      notes: '', maxTurns: 15
+    });
+    addConnection(fork.id, frontend.id);
+
+    // Add test agent in parallel if tests mentioned
+    if (hasTest) {
+      const testWriter = addNode('agent', 920, 470, 'Test Writer', {
+        agentType: 'tester', model: 'sonnet',
+        tools: ['Read', 'Write', 'Edit', 'Bash'],
+        prompt: PROMPTS.testWriter,
+        notes: '', maxTurns: 10
+      });
+      addConnection(fork.id, testWriter.id);
+      lastNodes = [backend, frontend, testWriter];
+    } else {
+      lastNodes = [backend, frontend];
+    }
+  } else {
+    // Even single-domain work benefits from parallel research + implementation
+    const agentType = hasUI ? 'frontend' : hasAPI ? 'backend' : 'coder';
+    const fork = addNode('parallel', 620, 245, 'Parallel Work', { strategy: 'all', description: 'Research and implementation in parallel' });
+    addConnection(planner.id, fork.id);
+
+    const researcher = addNode('agent', 920, 170, 'Researcher', {
+      agentType: 'researcher', model: 'sonnet',
+      tools: ['Read', 'Grep', 'Glob', 'WebSearch'],
+      prompt: PROMPTS.researcher,
+      notes: '', maxTurns: 10
+    });
+    addConnection(fork.id, researcher.id);
+
+    const implAgent = addNode('agent', 920, 320, hasUI ? 'Frontend Dev' : hasAPI ? 'Backend Dev' : 'Implementer', {
+      agentType, model: 'sonnet',
+      tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob'],
+      prompt: PROMPTS.implementer,
+      notes: '', maxTurns: 15
+    });
+    addConnection(fork.id, implAgent.id);
+    lastNodes = [researcher, implAgent];
+  }
+
+  // Security review if needed
+  if (hasSecurity) {
+    const secX = lastNodes[0].x + 280;
+    const secReview = addNode('agent', secX, lastNodes.length > 1 ? 245 : 250, 'Security Review', {
+      agentType: 'reviewer', model: 'sonnet',
+      tools: ['Read', 'Grep', 'Glob'],
+      prompt: PROMPTS.securityReview,
+      maxTurns: 5
+    });
+    lastNodes.forEach(n => addConnection(n.id, secReview.id));
+    lastNodes = [secReview];
+  }
+
+  // Code review
+  const reviewX = lastNodes[0].x + 280;
+  const reviewer = addNode('agent', reviewX, lastNodes.length > 1 ? 245 : 250, 'Code Review', {
+    agentType: 'reviewer', model: 'sonnet',
+    tools: ['Read', 'Grep', 'Glob'],
+    prompt: PROMPTS.reviewer,
+    maxTurns: 5
+  });
+  lastNodes.forEach(n => addConnection(n.id, reviewer.id));
+
+  // Decision: review pass?
+  const decision = addNode('decision', reviewX + 280, reviewer.y - 8, 'Review OK?', {
+    condition: 'All review checks pass', yesLabel: 'Pass', noLabel: 'Revise'
+  });
+  addConnection(reviewer.id, decision.id);
+
+  // Testing
+  if (hasTest || true) { // always include testing
+    const tester = addNode('agent', decision.x + 280, decision.y + 8, 'Tester', {
+      agentType: 'tester', model: 'sonnet',
+      tools: ['Read', 'Write', 'Edit', 'Bash'],
+      prompt: PROMPTS.tester,
+      maxTurns: 10
+    });
+    addConnection(decision.id, tester.id, 'Pass');
+
+    const output = addNode('output', tester.x + 280, tester.y, 'Deliverable', {
+      deliverable: 'Tested, reviewed code changes', format: 'pr'
+    });
+    addConnection(tester.id, output.id);
+  }
+
+  autoLayout();
+  setMode('select');
+}
+
+// ═══════════════════════════════════════════════════════════
+// PRESETS
+// ═══════════════════════════════════════════════════════════
+function loadPreset(preset) {
+  clearCanvas();
+  const presets = {
+    feature: () => {
+      const i = addNode('input', 80, 250, 'Requirements');
+      const p = addNode('agent', 340, 250, 'Planner', { agentType:'planner', model:'sonnet', tools:['Read','Grep','Glob'], prompt:PROMPTS.planner, maxTurns:5 });
+      const c = addNode('agent', 620, 250, 'Implementer', { agentType:'coder', model:'sonnet', tools:['Read','Write','Edit','Bash','Grep','Glob'], prompt:PROMPTS.implementer, maxTurns:15 });
+      const r = addNode('agent', 900, 250, 'Reviewer', { agentType:'reviewer', model:'sonnet', tools:['Read','Grep'], prompt:PROMPTS.reviewer, maxTurns:5 });
+      const t = addNode('agent', 1180, 250, 'Tester', { agentType:'tester', model:'sonnet', tools:['Read','Write','Bash'], prompt:PROMPTS.tester, maxTurns:10 });
+      const o = addNode('output', 1460, 250, 'PR Ready', { deliverable:'Tested feature', format:'pr' });
+      addConnection(i.id, p.id); addConnection(p.id, c.id); addConnection(c.id, r.id);
+      addConnection(r.id, t.id); addConnection(t.id, o.id);
+    },
+    bugfix: () => {
+      const i = addNode('input', 80, 250, 'Bug Report');
+      const inv = addNode('agent', 340, 250, 'Investigator', { agentType:'debugger', model:'sonnet', tools:['Read','Grep','Glob','Bash','LSP'], prompt:PROMPTS.investigator, maxTurns:15 });
+      const f = addNode('agent', 620, 250, 'Fixer', { agentType:'coder', model:'sonnet', tools:['Read','Write','Edit','Bash'], prompt:PROMPTS.fixer, maxTurns:10 });
+      const t = addNode('agent', 900, 250, 'Tester', { agentType:'tester', model:'sonnet', tools:['Read','Write','Bash'], prompt:PROMPTS.bugTester, maxTurns:10 });
+      const d = addNode('decision', 1180, 242, 'Fix Verified?', { condition:'Tests pass and bug is fixed', yesLabel:'Verified', noLabel:'Failed' });
+      const o = addNode('output', 1460, 250, 'Fix Complete', { deliverable:'Bug fix with regression test', format:'pr' });
+      addConnection(i.id, inv.id); addConnection(inv.id, f.id); addConnection(f.id, t.id);
+      addConnection(t.id, d.id); addConnection(d.id, o.id, 'Verified');
+    },
+    fullstack: () => {
+      const i = addNode('input', 80, 280, 'Feature Spec');
+      const arch = addNode('agent', 340, 280, 'Architect', { agentType:'architect', model:'sonnet', tools:['Read','Grep','Glob'], prompt:PROMPTS.architect, maxTurns:5 });
+      const fork = addNode('parallel', 620, 276, 'Parallel Dev', { strategy:'all' });
+      const be = addNode('agent', 920, 180, 'Backend', { agentType:'backend', model:'sonnet', tools:['Read','Write','Edit','Bash','Grep'], prompt:PROMPTS.backend, maxTurns:15 });
+      const fe = addNode('agent', 920, 370, 'Frontend', { agentType:'frontend', model:'sonnet', tools:['Read','Write','Edit','Bash','Grep'], prompt:PROMPTS.frontend, maxTurns:15 });
+      const r = addNode('agent', 1200, 280, 'Reviewer', { agentType:'reviewer', model:'sonnet', tools:['Read','Grep'], prompt:PROMPTS.fullstackReviewer, maxTurns:5 });
+      const t = addNode('agent', 1480, 280, 'Tester', { agentType:'tester', model:'sonnet', tools:['Read','Write','Bash'], prompt:PROMPTS.e2eTester, maxTurns:10 });
+      const o = addNode('output', 1760, 280, 'Deploy Ready', { deliverable:'Full stack feature', format:'pr' });
+      addConnection(i.id, arch.id); addConnection(arch.id, fork.id);
+      addConnection(fork.id, be.id); addConnection(fork.id, fe.id);
+      addConnection(be.id, r.id); addConnection(fe.id, r.id);
+      addConnection(r.id, t.id); addConnection(t.id, o.id);
+    },
+    review: () => {
+      const i = addNode('input', 80, 250, 'Code / PR');
+      const a = addNode('agent', 340, 250, 'Analyzer', { agentType:'researcher', model:'sonnet', tools:['Read','Grep','Glob','LSP'], prompt:PROMPTS.codeAnalyzer, maxTurns:10 });
+      const r = addNode('agent', 620, 250, 'Reviewer', { agentType:'reviewer', model:'sonnet', tools:['Read','Grep'], prompt:PROMPTS.codeReviewer, maxTurns:10 });
+      const im = addNode('agent', 900, 250, 'Improver', { agentType:'coder', model:'sonnet', tools:['Read','Write','Edit'], prompt:PROMPTS.improver, maxTurns:10 });
+      const v = addNode('agent', 1180, 250, 'Validator', { agentType:'tester', model:'sonnet', tools:['Read','Bash'], prompt:PROMPTS.validator, maxTurns:5 });
+      const o = addNode('output', 1460, 250, 'Improved Code', { deliverable:'Reviewed and improved code', format:'code' });
+      addConnection(i.id, a.id); addConnection(a.id, r.id); addConnection(r.id, im.id);
+      addConnection(im.id, v.id); addConnection(v.id, o.id);
+    },
+    parallel_research: () => {
+      const i = addNode('input', 80, 280, 'Research Topic');
+      const fork = addNode('parallel', 340, 276, 'Parallel Research', { strategy:'all' });
+      addConnection(i.id, fork.id);
+      const r1 = addNode('agent', 640, 140, 'Codebase Explorer', { agentType:'researcher', model:'sonnet', tools:['Read','Grep','Glob','LSP'], prompt:PROMPTS.codebaseExplorer, notes:'', maxTurns:15 });
+      const r2 = addNode('agent', 640, 280, 'Doc Researcher', { agentType:'researcher', model:'sonnet', tools:['Read','WebSearch','WebFetch'], prompt:PROMPTS.docResearcher, notes:'', maxTurns:10 });
+      const r3 = addNode('agent', 640, 420, 'Pattern Analyzer', { agentType:'researcher', model:'sonnet', tools:['Read','Grep','Glob'], prompt:PROMPTS.patternAnalyzer, notes:'', maxTurns:10 });
+      addConnection(fork.id, r1.id); addConnection(fork.id, r2.id); addConnection(fork.id, r3.id);
+      const join = addNode('parallel', 940, 276, 'Collect', { strategy:'all' });
+      addConnection(r1.id, join.id); addConnection(r2.id, join.id); addConnection(r3.id, join.id);
+      const synth = addNode('agent', 1220, 280, 'Synthesizer', { agentType:'planner', model:'sonnet', tools:['Read','Write'], prompt:PROMPTS.synthesizer, notes:'', maxTurns:5 });
+      addConnection(join.id, synth.id);
+      const o = addNode('output', 1500, 280, 'Research Report', { deliverable:'Comprehensive research report with recommendations', format:'report' });
+      addConnection(synth.id, o.id);
+    },
+    swarm: () => {
+      const i = addNode('input', 80, 310, 'Codebase / PR');
+      const fork = addNode('parallel', 340, 306, 'Analysis Swarm', { strategy:'all' });
+      addConnection(i.id, fork.id);
+      const a1 = addNode('agent', 640, 100, 'Security Auditor', { agentType:'reviewer', model:'sonnet', tools:['Read','Grep','Glob'], prompt:PROMPTS.securityAuditor, notes:'', maxTurns:10 });
+      const a2 = addNode('agent', 640, 230, 'Quality Analyst', { agentType:'reviewer', model:'sonnet', tools:['Read','Grep','Glob','LSP'], prompt:PROMPTS.qualityAnalyst, notes:'', maxTurns:10 });
+      const a3 = addNode('agent', 640, 360, 'Perf Profiler', { agentType:'reviewer', model:'sonnet', tools:['Read','Grep','Glob','Bash'], prompt:PROMPTS.perfProfiler, notes:'', maxTurns:10 });
+      const a4 = addNode('agent', 640, 490, 'Arch Reviewer', { agentType:'architect', model:'sonnet', tools:['Read','Grep','Glob'], prompt:PROMPTS.archReviewer, notes:'', maxTurns:10 });
+      addConnection(fork.id, a1.id); addConnection(fork.id, a2.id); addConnection(fork.id, a3.id); addConnection(fork.id, a4.id);
+      const join = addNode('parallel', 940, 306, 'Aggregate', { strategy:'all' });
+      addConnection(a1.id, join.id); addConnection(a2.id, join.id); addConnection(a3.id, join.id); addConnection(a4.id, join.id);
+      const report = addNode('agent', 1220, 310, 'Report Builder', { agentType:'planner', model:'sonnet', tools:['Read','Write'], prompt:PROMPTS.reportBuilder, notes:'', maxTurns:5 });
+      addConnection(join.id, report.id);
+      const o = addNode('output', 1500, 310, 'Audit Report', { deliverable:'Multi-dimensional code audit with prioritized findings', format:'report' });
+      addConnection(report.id, o.id);
+    }
+  };
+  if (presets[preset]) { presets[preset](); autoLayout(); }
+}
+
+function clearCanvas() {
+  state.nodes = [];
+  state.connections = [];
+  state.selectedId = null;
+  state.connectFrom = null;
+  render();
+  updateConfig();
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXPORT FORMAT SYSTEM
+// ═══════════════════════════════════════════════════════════
+function setExportFormat(format) {
+  state.exportFormat = format;
+  document.querySelectorAll('.format-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.format === format);
+  });
+  updatePrompt();
+}
+
+function updatePrompt() {
+  const out = $('promptOutput');
+  if (state.nodes.length === 0) {
+    const hints = {
+      prompt: 'Design your workflow to generate a structured prompt...',
+      subagent: 'Design your workflow to generate Claude Code sub-agent calls...',
+      teams: 'Design your workflow to generate an Agent Teams delegation brief...',
+      sdk: 'Design your workflow to generate Agent SDK Python code...',
+      claude: 'Design your workflow to generate a Claude prompt...'
+    };
+    out.textContent = hints[state.exportFormat] || hints.prompt;
+    return;
+  }
+  const generators = { prompt: genWorkflow, subagent: genSubAgents, teams: genAgentTeams, sdk: genAgentSDK, claude: genClaudePrompt };
+  out.textContent = (generators[state.exportFormat] || genWorkflow)();
+}
+
+// ── Helpers ──
+function getStory() { return $('storyInput').value.trim(); }
+function getName() { return $('workflowName').value.trim(); }
+function getAgentTypeName(id) { const a = AGENT_TYPES.find(t => t.id === id); return a ? a.name : 'General'; }
+function getDeps(nodeId) {
+  return state.connections.filter(c => c.to === nodeId).map(c => {
+    const from = state.nodes.find(n => n.id === c.from);
+    return from ? from.label : null;
+  }).filter(Boolean);
+}
+function getDownstream(nodeId) {
+  return state.connections.filter(c => c.from === nodeId).map(c => {
+    const to = state.nodes.find(n => n.id === c.to);
+    return to ? to.label : null;
+  }).filter(Boolean);
+}
+function getDownstreamNodes(nodeId) {
+  return state.connections.filter(c => c.from === nodeId).map(c =>
+    state.nodes.find(n => n.id === c.to)
+  ).filter(Boolean);
+}
+function getDownstreamDecisions(nodeId) {
+  return getDownstreamNodes(nodeId).filter(n => n.type === 'decision');
+}
+
+// ═══════════════════════════════════════════════════════════
+// FORMAT 1: Workflow Prompt (structured markdown)
+// ═══════════════════════════════════════════════════════════
+function genWorkflow() {
+  const story = getStory(), name = getName();
+  const ordered = topologicalSort();
+  const agents = ordered.filter(n => n.type === 'agent');
+  const decisions = ordered.filter(n => n.type === 'decision');
+  const parallels = ordered.filter(n => n.type === 'parallel');
+  const outputs = ordered.filter(n => n.type === 'output');
+  const p = [];
+
+  p.push('## AI Agent Workflow' + (name ? ': ' + name : ''));
+  p.push('');
+  if (story) { p.push('### Requirements'); p.push(''); p.push(story); p.push(''); }
+
+  // Identify parallel groups
+  const parallelChildren = new Set();
+  parallels.forEach(par => {
+    state.connections.filter(c => c.from === par.id).forEach(c => parallelChildren.add(c.to));
+  });
+
+  if (agents.length > 0) {
+    p.push('### Workflow Steps');
+    p.push('');
+    let stepNum = 1;
+    let i = 0;
+    while (i < agents.length) {
+      const node = agents[i];
+      const isParallel = parallelChildren.has(node.id);
+
+      if (isParallel) {
+        const siblings = agents.filter(a => parallelChildren.has(a.id));
+        p.push(`**Step ${stepNum}: Parallel Execution**`);
+        p.push('');
+        p.push('Run the following agents simultaneously:');
+        p.push('');
+        siblings.forEach(s => {
+          const sAt = getAgentTypeName(s.config.agentType);
+          p.push(`  **${s.label}** (${sAt} Agent)`);
+          p.push(`  - Model: ${getModelLabel(s.config.model)}`);
+          if (s.config.tools.length > 0) p.push(`  - Tools: ${s.config.tools.join(', ')}`);
+          if (s.config.prompt) p.push(`  - Instructions: ${s.config.prompt}`);
+          if (s.config.notes && s.config.notes.trim()) p.push(`  - Context: ${s.config.notes.trim()}`);
+          p.push('');
+        });
+        i += siblings.length;
+      } else {
+        const deps = getDeps(node.id);
+        const at = getAgentTypeName(node.config.agentType);
+        p.push(`**Step ${stepNum}: ${node.label}** (${at} Agent)`);
+        p.push(`- Model: ${getModelLabel(node.config.model)}`);
+        if (node.config.tools.length > 0) p.push(`- Tools: ${node.config.tools.join(', ')}`);
+        if (node.config.prompt) p.push(`- Instructions: ${node.config.prompt}`);
+        if (node.config.notes && node.config.notes.trim()) p.push(`- Additional context: ${node.config.notes.trim()}`);
+        if (node.config.maxTurns) p.push(`- Max turns: ${node.config.maxTurns}`);
+        if (deps.length > 0) p.push(`- Depends on: ${deps.join(', ')}`);
+        // Decision gate awareness
+        const downDec = getDownstreamDecisions(node.id);
+        if (downDec.length > 0) {
+          downDec.forEach(d => {
+            p.push(`- Success gate: "${d.config.condition || d.label}" \u2192 ${d.config.yesLabel || 'Pass'}/${d.config.noLabel || 'Fail'}`);
+          });
+        }
+        p.push('');
+        i++;
+      }
+      stepNum++;
+    }
+  }
+
+  if (decisions.length > 0) {
+    p.push('### Decision Points');
+    p.push('');
+    decisions.forEach(d => {
+      // Find which agent feeds into this decision
+      const feeders = state.connections.filter(c => c.to === d.id).map(c => {
+        const n = state.nodes.find(nd => nd.id === c.from);
+        return n ? n.label : null;
+      }).filter(Boolean);
+      p.push(`- **${d.label}**: ${d.config.condition || 'Evaluate condition'}`);
+      if (feeders.length > 0) p.push(`  - Evaluated based on output from: ${feeders.join(', ')}`);
+      p.push(`  - ${d.config.yesLabel || 'Yes'} \u2192 continue to next step`);
+      p.push(`  - ${d.config.noLabel || 'No'} \u2192 re-run previous step with feedback`);
+    }); p.push('');
+  }
+
+  if (parallels.length > 0) {
+    p.push('### Parallel Execution');
+    parallels.forEach(par => {
+      const targets = getDownstream(par.id);
+      p.push(`- **${par.label}**: Run [${targets.join(', ')}] in parallel (${par.config.strategy || 'wait for all'})`);
+    }); p.push('');
+  }
+
+  const flow = ordered.map(n => n.label);
+  if (flow.length > 1) { p.push('### Execution Flow'); p.push(flow.join(' \u2192 ')); p.push(''); }
+
+  if (outputs.length > 0) {
+    p.push('### Expected Deliverables');
+    outputs.forEach(o => p.push(`- **${o.label}**: ${o.config.deliverable || 'Deliverable'} (format: ${o.config.format})`));
+    p.push('');
+  }
+
+  p.push('### Implementation Notes');
+  p.push('');
+  p.push('- Use Claude Code Task tool to spawn sub-agents for each step');
+  p.push('- Each agent receives the output from its dependencies as input context');
+  p.push('- At each decision point, evaluate the agent output against the criteria before proceeding');
+  if (parallels.length > 0) p.push('- Launch parallel steps simultaneously using multiple Task calls in the same message');
+  p.push('- Review each agent output before passing it downstream');
+  return p.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════
+// FORMAT 2: Sub-Agents (Claude Code Task tool calls)
+// ═══════════════════════════════════════════════════════════
+function genSubAgents() {
+  const story = getStory(), name = getName();
+  const ordered = topologicalSort();
+  const agents = ordered.filter(n => n.type === 'agent');
+  const parallels = ordered.filter(n => n.type === 'parallel');
+  const p = [];
+
+  p.push('# Claude Code Sub-Agent Workflow' + (name ? ': ' + name : ''));
+  p.push('#');
+  p.push('# Paste this into Claude Code. Each step uses the Task tool to spawn a sub-agent.');
+  p.push('# Sequential steps wait for the previous to complete before starting.');
+  p.push('# Parallel steps should be launched concurrently.');
+  p.push('');
+
+  if (story) {
+    p.push('## Context');
+    p.push('');
+    p.push(story);
+    p.push('');
+  }
+
+  p.push('## Execution Plan');
+  p.push('');
+
+  // Identify parallel groups
+  const parallelChildren = new Set();
+  parallels.forEach(par => {
+    state.connections.filter(c => c.from === par.id).forEach(c => parallelChildren.add(c.to));
+  });
+
+  let stepNum = 1;
+  agents.forEach((node, i) => {
+    const deps = getDeps(node.id);
+    const isParallel = parallelChildren.has(node.id);
+    const at = getAgentTypeName(node.config.agentType);
+
+    // Determine subagent_type mapping
+    let subagentType = 'general-purpose';
+    if (['coder','frontend','backend'].includes(node.config.agentType)) subagentType = 'general-purpose';
+    if (['researcher','debugger','analyzer'].includes(node.config.agentType)) subagentType = 'general-purpose';
+
+    if (isParallel) {
+      p.push(`### Step ${stepNum} (PARALLEL): ${node.label}`);
+    } else {
+      p.push(`### Step ${stepNum}: ${node.label}`);
+    }
+    p.push('');
+    p.push('```');
+    p.push(`Task(subagent_type="${subagentType}", model="${node.config.model}", prompt="`);
+
+    // Build comprehensive sub-agent prompt
+    const promptLines = [];
+    promptLines.push(`You are a ${at} agent responsible for: ${node.label}.`);
+    if (node.config.tools.length > 0) {
+      promptLines.push(`You have access to these tools: ${node.config.tools.join(', ')}.`);
+    }
+    promptLines.push('');
+
+    // Task instructions
+    if (node.config.prompt) {
+      promptLines.push('## Your Task');
+      promptLines.push(node.config.prompt);
+      promptLines.push('');
+    }
+
+    // Custom notes
+    if (node.config.notes && node.config.notes.trim()) {
+      promptLines.push('## Additional Context');
+      promptLines.push(node.config.notes.trim());
+      promptLines.push('');
+    }
+
+    // Dependency context
+    if (deps.length > 0) {
+      promptLines.push('## Input');
+      promptLines.push(`Review the output from: ${deps.join(', ')} before proceeding. Use their findings to inform your work.`);
+      promptLines.push('');
+    }
+
+    // Downstream awareness - decision gates
+    const downstreamDecisions = getDownstreamDecisions(node.id);
+    if (downstreamDecisions.length > 0) {
+      promptLines.push('## Success Gate');
+      downstreamDecisions.forEach(d => {
+        promptLines.push(`Your output must clearly address: "${d.config.condition || d.label}"`);
+        promptLines.push(`Provide an explicit ${d.config.yesLabel || 'Pass'}/${d.config.noLabel || 'Fail'} verdict with supporting evidence.`);
+      });
+      promptLines.push('');
+    } else {
+      // Show what comes next so agent knows their audience
+      const downstream = getDownstream(node.id);
+      if (downstream.length > 0) {
+        promptLines.push('## Downstream');
+        promptLines.push(`Your output will be consumed by: ${downstream.join(', ')}. Structure your output so the next step can act on it immediately.`);
+        promptLines.push('');
+      }
+    }
+
+    // Requirements
+    if (story) {
+      promptLines.push('## Requirements');
+      promptLines.push(story);
+      promptLines.push('');
+    }
+
+    // Output format guidance
+    promptLines.push('## Output Format');
+    promptLines.push('Provide a structured response with:');
+    promptLines.push('1. Summary of actions taken');
+    promptLines.push('2. Detailed findings or changes made');
+    if (downstreamDecisions.length > 0) {
+      promptLines.push('3. Explicit verdict (see Success Gate above)');
+    } else {
+      promptLines.push('3. Key deliverables or results');
+    }
+    promptLines.push('4. Any concerns, risks, or blockers for the next step');
+
+    p.push(promptLines.join('\n'));
+    p.push('")');
+    p.push('```');
+    p.push('');
+    p.push(`- **Agent type**: ${at}`);
+    p.push(`- **Model**: ${getModelLabel(node.config.model)} (\`${node.config.model}\`)`);
+    p.push(`- **Tools**: ${node.config.tools.join(', ')}`);
+    p.push(`- **Max turns**: ${node.config.maxTurns}`);
+    if (deps.length > 0) p.push(`- **Depends on**: ${deps.join(', ')}`);
+    if (isParallel) p.push('- **Execution**: Launch in parallel with other parallel steps');
+    p.push('');
+
+    stepNum++;
+  });
+
+  // Parallel execution note
+  if (parallels.length > 0) {
+    p.push('---');
+    p.push('## Parallel Execution Notes');
+    p.push('');
+    p.push('To run parallel steps, launch multiple Task calls in the same message:');
+    p.push('');
+    parallels.forEach(par => {
+      const children = state.connections.filter(c => c.from === par.id).map(c => {
+        const n = state.nodes.find(nd => nd.id === c.to);
+        return n ? n.label : null;
+      }).filter(Boolean);
+      p.push(`Launch simultaneously: ${children.join(', ')}`);
+    });
+  }
+
+  return p.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════
+// FORMAT 3: Agent Teams (TeammateTool delegation brief)
+// ═══════════════════════════════════════════════════════════
+function genAgentTeams() {
+  const story = getStory(), name = getName();
+  const ordered = topologicalSort();
+  const agents = ordered.filter(n => n.type === 'agent');
+  const parallels = ordered.filter(n => n.type === 'parallel');
+  const decisions = ordered.filter(n => n.type === 'decision');
+  const outputs = ordered.filter(n => n.type === 'output');
+  const p = [];
+
+  p.push('# Agent Teams Lead Brief' + (name ? ': ' + name : ''));
+  p.push('');
+  p.push('> Enable with: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1');
+  p.push('> Paste this prompt to the lead agent to orchestrate your team.');
+  p.push('');
+
+  p.push('## Your Role');
+  p.push('');
+  p.push('You are the **team lead**. Your job is to coordinate teammates to complete this workflow.');
+  p.push('Use TeamCreate to set up the team, then spawn teammates via Task tool with `team_name`.');
+  p.push('Use the shared task list (TaskCreate/TaskUpdate) to assign work and track progress.');
+  p.push('Pass context between dependent steps explicitly — teammates do NOT share state.');
+  p.push('');
+
+  if (story) {
+    p.push('## Requirements');
+    p.push('');
+    p.push(story);
+    p.push('');
+  }
+
+  p.push('## Team Delegation Plan');
+  p.push('');
+
+  // Identify parallel groups
+  const parallelChildren = new Set();
+  parallels.forEach(par => {
+    state.connections.filter(c => c.from === par.id).forEach(c => parallelChildren.add(c.to));
+  });
+
+  // Build teammate delegation details
+  function buildTeammateBlock(node, indent) {
+    const at = getAgentTypeName(node.config.agentType);
+    const deps = getDeps(node.id);
+    const pre = indent || '';
+    const lines = [];
+
+    lines.push(`${pre}**Teammate: "${node.label}"** (${at})`);
+    lines.push(`${pre}- Model: \`${node.config.model}\``);
+    lines.push(`${pre}- Tools: ${node.config.tools.join(', ')}`);
+    lines.push(`${pre}- Max turns: ${node.config.maxTurns}`);
+
+    // Task description - full prompt, not just label
+    if (node.config.prompt) {
+      lines.push(`${pre}- **Task**:`);
+      lines.push('');
+      node.config.prompt.split('\n').forEach(line => lines.push(`${pre}  ${line}`));
+      lines.push('');
+    } else {
+      lines.push(`${pre}- **Task**: ${node.label}`);
+    }
+
+    if (node.config.notes && node.config.notes.trim()) {
+      lines.push(`${pre}- **Additional context**: ${node.config.notes.trim()}`);
+    }
+
+    if (deps.length > 0) {
+      lines.push(`${pre}- **Input from**: ${deps.join(', ')} — pass their output as context in the task prompt`);
+    }
+
+    // Decision gate awareness
+    const downDec = getDownstreamDecisions(node.id);
+    if (downDec.length > 0) {
+      downDec.forEach(d => {
+        lines.push(`${pre}- **Success gate**: This teammate's output will be evaluated against: "${d.config.condition || d.label}"`);
+        lines.push(`${pre}  Tell them to provide an explicit ${d.config.yesLabel || 'Pass'}/${d.config.noLabel || 'Fail'} verdict with evidence.`);
+      });
+    }
+
+    return lines;
+  }
+
+  let stepNum = 1;
+  let i = 0;
+  while (i < agents.length) {
+    const node = agents[i];
+    const isParallel = parallelChildren.has(node.id);
+
+    if (isParallel) {
+      const siblings = agents.filter(a => parallelChildren.has(a.id));
+      p.push(`### Step ${stepNum}: Parallel Delegation`);
+      p.push('');
+      p.push('Spawn these teammates **simultaneously** (multiple Task calls in one message):');
+      p.push('');
+      siblings.forEach(s => {
+        buildTeammateBlock(s, '').forEach(line => p.push(line));
+        p.push('');
+      });
+      p.push('**Wait for ALL parallel teammates to complete before proceeding.** Collect and review all outputs.');
+      p.push('');
+      i += siblings.length;
+      stepNum++;
+      continue;
+    }
+
+    const deps = getDeps(node.id);
+    p.push(`### Step ${stepNum}: Spawn "${node.label}" Teammate`);
+    p.push('');
+    buildTeammateBlock(node, '').forEach(line => p.push(line));
+    p.push('');
+    i++;
+    stepNum++;
+  }
+
+  if (decisions.length > 0) {
+    p.push('## Decision Gates');
+    p.push('');
+    p.push('As team lead, **you** make these decisions based on teammate output:');
+    p.push('');
+    decisions.forEach(d => {
+      // Find which teammate feeds this decision
+      const feeders = state.connections.filter(c => c.to === d.id).map(c => {
+        const n = state.nodes.find(nd => nd.id === c.from);
+        return n ? n.label : null;
+      }).filter(Boolean);
+      p.push(`**${d.label}**: ${d.config.condition || 'Evaluate condition'}`);
+      if (feeders.length > 0) p.push(`- Review output from: ${feeders.join(', ')}`);
+      p.push(`- If **${d.config.yesLabel || 'Yes'}**: proceed to the next step`);
+      p.push(`- If **${d.config.noLabel || 'No'}**: re-assign to the relevant teammate with specific feedback on what needs to change`);
+      p.push('');
+    });
+  }
+
+  if (outputs.length > 0) {
+    p.push('## Expected Deliverables');
+    p.push('');
+    outputs.forEach(o => {
+      p.push(`- **${o.label}**: ${o.config.deliverable || 'Complete deliverable'} (format: ${o.config.format})`);
+    });
+    p.push('');
+  }
+
+  p.push('## Coordination Rules');
+  p.push('');
+  p.push('1. Create the team first with TeamCreate, then spawn teammates via Task tool with `team_name`');
+  p.push('2. Use TaskCreate to create a task for each step, then assign with TaskUpdate `owner`');
+  p.push('3. Pass relevant context between dependent steps explicitly (teammates do NOT share memory)');
+  p.push('4. When a teammate completes, review their output quality before spawning the next step');
+  p.push('5. At decision gates, evaluate the output and either proceed or re-assign with feedback');
+  p.push('6. If a teammate gets stuck or produces poor output, provide guidance and re-scope');
+  p.push('7. When all steps complete, send shutdown_request to all teammates and report final status');
+
+  return p.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════
+// FORMAT 4: Agent SDK (Python skeleton)
+// ═══════════════════════════════════════════════════════════
+function genAgentSDK() {
+  const story = getStory(), name = getName();
+  const ordered = topologicalSort();
+  const agents = ordered.filter(n => n.type === 'agent');
+  const parallels = ordered.filter(n => n.type === 'parallel');
+  const p = [];
+
+  const safeName = (name || 'workflow').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+
+  p.push('"""');
+  p.push(`Agent SDK Workflow: ${name || 'AI Workflow'}`);
+  p.push('');
+  p.push('Generated by AI Agent Workflow Designer');
+  p.push('Requires: pip install anthropic-ai-claude-agent-sdk');
+  p.push('"""');
+  p.push('');
+  p.push('import asyncio');
+  p.push('from claude_agent_sdk import Agent, AgentConfig, tool');
+  p.push('');
+
+  // Generate agent definitions
+  agents.forEach(node => {
+    const varName = node.label.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+    const at = getAgentTypeName(node.config.agentType);
+    const toolsList = node.config.tools.map(t => `"${t}"`).join(', ');
+
+    p.push(`# ${node.label} - ${at} Agent`);
+    p.push(`${varName}_config = AgentConfig(`);
+    p.push(`    name="${node.label}",`);
+    const sdkModelMap = { sonnet: 'claude-sonnet-4-5-20241022', 'sonnet-4.6': 'claude-sonnet-4-6-20260115', opus: 'claude-opus-4-5-20250918', 'opus-4.6': 'claude-opus-4-6-20260115', haiku: 'claude-haiku-4-5-20251001' };
+    p.push(`    model="${sdkModelMap[node.config.model] || node.config.model}",`);
+    p.push(`    max_turns=${node.config.maxTurns},`);
+    p.push(`    tools=[${toolsList}],`);
+
+    const instructions = [];
+    if (node.config.prompt) instructions.push(node.config.prompt);
+    if (node.config.notes && node.config.notes.trim()) instructions.push('Additional context: ' + node.config.notes.trim());
+    // Add downstream decision awareness
+    const downDec = getDownstreamDecisions(node.id);
+    if (downDec.length > 0) {
+      downDec.forEach(d => {
+        instructions.push(`Success gate: Your output must address "${d.config.condition || d.label}". Provide an explicit ${d.config.yesLabel || 'Pass'}/${d.config.noLabel || 'Fail'} verdict.`);
+      });
+    }
+
+    if (instructions.length > 0) {
+      p.push(`    instructions="""`);
+      instructions.forEach(inst => p.push(`    ${inst}`));
+      p.push(`    """,`);
+    }
+    p.push(')');
+    p.push(`${varName} = Agent(config=${varName}_config)`);
+    p.push('');
+  });
+
+  // Generate orchestration function
+  p.push('');
+  p.push(`async def run_${safeName}():`);
+  p.push(`    """Orchestrate the ${name || 'workflow'} pipeline."""`);
+  p.push('');
+
+  if (story) {
+    p.push('    # Requirements');
+    p.push(`    requirements = """`);
+    p.push(`    ${story}`);
+    p.push('    """');
+    p.push('');
+  }
+
+  // Identify parallel groups
+  const parallelChildren = new Set();
+  parallels.forEach(par => {
+    state.connections.filter(c => c.from === par.id).forEach(c => parallelChildren.add(c.to));
+  });
+
+  let i = 0;
+  let lastResultVar = 'requirements' + (story ? '' : ' = "Start the workflow"');
+  while (i < agents.length) {
+    const node = agents[i];
+    const varName = node.label.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+    const isParallel = parallelChildren.has(node.id);
+
+    if (isParallel) {
+      const siblings = agents.filter(a => parallelChildren.has(a.id));
+      p.push('    # Parallel execution');
+      const taskNames = siblings.map(s => {
+        const vn = s.label.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        return `${vn}_task`;
+      });
+      siblings.forEach(s => {
+        const vn = s.label.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        p.push(`    ${vn}_task = asyncio.create_task(${vn}.run(context=${lastResultVar}))`);
+      });
+      p.push(`    results = await asyncio.gather(${taskNames.join(', ')})`);
+      p.push(`    ${siblings.map((s, j) => s.label.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() + '_result').join(', ')} = results`);
+      lastResultVar = 'results';
+      i += siblings.length;
+    } else {
+      p.push(`    # Step: ${node.label}`);
+      p.push(`    ${varName}_result = await ${varName}.run(context=${lastResultVar})`);
+      lastResultVar = `${varName}_result`;
+      i++;
+    }
+    p.push('');
+  }
+
+  p.push(`    return ${lastResultVar}`);
+  p.push('');
+  p.push('');
+  p.push('if __name__ == "__main__":');
+  p.push(`    result = asyncio.run(run_${safeName}())`);
+  p.push('    print("Workflow complete:", result)');
+
+  return p.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════
+// FORMAT 5: Claude Prompt (for Claude.ai / API)
+// ═══════════════════════════════════════════════════════════
+function genClaudePrompt() {
+  const story = getStory(), name = getName();
+  const ordered = topologicalSort();
+  const agents = ordered.filter(n => n.type === 'agent');
+  const decisions = ordered.filter(n => n.type === 'decision');
+  const parallels = ordered.filter(n => n.type === 'parallel');
+  const outputs = ordered.filter(n => n.type === 'output');
+  const p = [];
+
+  p.push(`I need you to act as a development workflow orchestrator${name ? ' for ' + name : ''}.`);
+  p.push('');
+  p.push('Complete the following workflow step by step. For each step:');
+  p.push('1. Adopt the specified role and mindset');
+  p.push('2. Complete the task using the methodology described');
+  p.push('3. Present your output clearly before moving to the next step');
+  p.push('4. At decision checkpoints, evaluate your work against the criteria before continuing');
+  p.push('');
+
+  if (story) {
+    p.push('## Requirements');
+    p.push('');
+    p.push(story);
+    p.push('');
+  }
+
+  if (agents.length > 0) {
+    p.push('## Workflow');
+    p.push('');
+
+    // Identify parallel groups
+    const parallelChildren = new Set();
+    parallels.forEach(par => {
+      state.connections.filter(c => c.from === par.id).forEach(c => parallelChildren.add(c.to));
+    });
+
+    let stepNum = 1;
+    let i = 0;
+    while (i < agents.length) {
+      const node = agents[i];
+      const at = getAgentTypeName(node.config.agentType);
+      const isParallel = parallelChildren.has(node.id);
+
+      if (isParallel) {
+        const siblings = agents.filter(a => parallelChildren.has(a.id));
+        p.push(`### Step ${stepNum}: Parallel Work`);
+        p.push('');
+        p.push('Address all of the following perspectives together:');
+        p.push('');
+        siblings.forEach(s => {
+          const sAt = getAgentTypeName(s.config.agentType);
+          p.push(`**${s.label}** (as ${sAt}):`);
+          p.push('');
+          if (s.config.prompt) { p.push(s.config.prompt); p.push(''); }
+          if (s.config.notes && s.config.notes.trim()) {
+            p.push(`Additional context: ${s.config.notes.trim()}`);
+            p.push('');
+          }
+          // Decision gate for parallel agents
+          const downDec = getDownstreamDecisions(s.id);
+          if (downDec.length > 0) {
+            downDec.forEach(d => {
+              p.push(`Success criteria: "${d.config.condition || d.label}" — provide a clear ${d.config.yesLabel || 'Pass'}/${d.config.noLabel || 'Fail'} verdict.`);
+            });
+            p.push('');
+          }
+        });
+        p.push('Present findings for each perspective clearly separated.');
+        p.push('');
+        i += siblings.length;
+      } else {
+        const deps = getDeps(node.id);
+        p.push(`### Step ${stepNum}: ${node.label}`);
+        p.push('');
+        p.push(`**Role**: ${at}`);
+        p.push('');
+        if (node.config.prompt) { p.push(node.config.prompt); p.push(''); }
+        if (node.config.notes && node.config.notes.trim()) {
+          p.push(`**Additional context**: ${node.config.notes.trim()}`);
+          p.push('');
+        }
+        if (deps.length > 0) {
+          p.push(`**Input**: Use the output from ${deps.join(', ')} to inform this step.`);
+          p.push('');
+        }
+        // Decision gate awareness
+        const downDec = getDownstreamDecisions(node.id);
+        if (downDec.length > 0) {
+          downDec.forEach(d => {
+            p.push(`**Before proceeding**: Evaluate against "${d.config.condition || d.label}".`);
+            p.push(`If ${d.config.yesLabel || 'Pass'}: continue. If ${d.config.noLabel || 'Fail'}: go back and revise this step until the criteria is met.`);
+          });
+          p.push('');
+        }
+        i++;
+      }
+      stepNum++;
+    }
+  }
+
+  if (decisions.length > 0 && agents.every(a => getDownstreamDecisions(a.id).length === 0)) {
+    // Only show separate decision section if decisions weren't already inlined
+    p.push('## Decision Points');
+    p.push('');
+    decisions.forEach(d => {
+      const feeders = state.connections.filter(c => c.to === d.id).map(c => {
+        const n = state.nodes.find(nd => nd.id === c.from);
+        return n ? n.label : null;
+      }).filter(Boolean);
+      p.push(`At the "${d.label}" checkpoint: ${d.config.condition || 'evaluate the condition'}.`);
+      if (feeders.length > 0) p.push(`Based on output from: ${feeders.join(', ')}.`);
+      p.push(`If ${d.config.yesLabel || 'yes'}: continue to the next step.`);
+      p.push(`If ${d.config.noLabel || 'no'}: revisit the previous step and address the shortcomings.`);
+      p.push('');
+    });
+  }
+
+  if (outputs.length > 0) {
+    p.push('## Expected Deliverables');
+    p.push('');
+    outputs.forEach(o => {
+      p.push(`- **${o.label}**: ${o.config.deliverable || 'Complete deliverable'} (format: ${o.config.format})`);
+    });
+    p.push('');
+  }
+
+  p.push('## Instructions');
+  p.push('');
+  p.push('Work through each step sequentially, showing your complete work for each phase.');
+  p.push('Do not skip steps or combine them. At each decision checkpoint, explicitly state');
+  p.push('whether the criteria is met before continuing. Present the final deliverables at the end.');
+
+  return p.join('\n');
+}
+
+function topologicalSort() {
+  const adj = {};
+  const inDeg = {};
+  state.nodes.forEach(n => { adj[n.id] = []; inDeg[n.id] = 0; });
+  state.connections.forEach(c => {
+    if (adj[c.from]) { adj[c.from].push(c.to); inDeg[c.to] = (inDeg[c.to] || 0) + 1; }
+  });
+  const result = [];
+  let queue = state.nodes.filter(n => (inDeg[n.id] || 0) === 0).map(n => n.id);
+  const visited = new Set();
+  while (queue.length > 0) {
+    const next = [];
+    queue.forEach(id => {
+      visited.add(id);
+      result.push(state.nodes.find(n => n.id === id));
+      (adj[id] || []).forEach(to => {
+        inDeg[to]--;
+        if (inDeg[to] <= 0 && !visited.has(to)) next.push(to);
+      });
+    });
+    queue = next;
+  }
+  state.nodes.filter(n => !visited.has(n.id)).forEach(n => result.push(n));
+  return result.filter(Boolean);
+}
+
+// ═══════════════════════════════════════════════════════════
+// COPY
+// ═══════════════════════════════════════════════════════════
+function copyPrompt() {
+  const text = $('promptOutput').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const toast = $('toast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1800);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+updateTransform();
+render();
+</script>
+</body>
+</html>
