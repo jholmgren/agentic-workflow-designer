@@ -2890,32 +2890,24 @@ render();
     const story = event.data.story;
     if (!story) return;
 
-    // --- Locate the story textarea ---
-    // AWD uses a <textarea> for story input; adjust selector if needed.
-    const textarea = document.querySelector(
-      'textarea#story-input, ' +
-      'textarea[placeholder*="story"], ' +
-      'textarea[placeholder*="ticket"], ' +
-      'textarea[placeholder*="Jira"], ' +
-      'textarea'
-    );
-
+    // --- Populate story textarea (#storyInput) ---
+    const textarea = document.getElementById('storyInput');
     if (!textarea) {
-      console.warn('[AWD Companion] Could not find story textarea.');
+      console.warn('[AWD Companion] Could not find #storyInput textarea.');
       return;
     }
-
-    // Set value and trigger React/Vue/plain-JS change events
-    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-      window.HTMLTextAreaElement.prototype, 'value'
-    ).set;
-    nativeInputValueSetter.call(textarea, story);
-
+    textarea.value = story;
     textarea.dispatchEvent(new Event('input',  { bubbles: true }));
     textarea.dispatchEvent(new Event('change', { bubbles: true }));
-
     textarea.focus();
     textarea.scrollTop = 0;
+
+    // --- Pre-fill workflow name (#workflowName) if it's empty ---
+    const nameInput = document.getElementById('workflowName');
+    if (nameInput && !nameInput.value.trim() && event.data.workflowName) {
+      nameInput.value = event.data.workflowName;
+      nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
 
     console.info('[AWD Companion] Story context injected ✓');
   });
