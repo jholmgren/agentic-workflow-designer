@@ -9,7 +9,8 @@ A visual, interactive playground for designing AI agent workflows from Jira tick
 1. **Paste a Jira ticket or user story** into the story input
 2. **Auto-generate a workflow** or build one manually from the node palette
 3. **Configure each agent** - model, tools, prompt, max turns
-4. **Export** in 5 formats optimized for different execution environments
+4. **Export** in 6 formats optimized for different execution environments
+5. **Enable Memory Protocol** (optional) for compaction-resilient workflows with TOON notation
 
 ## Export Formats
 
@@ -20,6 +21,19 @@ A visual, interactive playground for designing AI agent workflows from Jira tick
 | **Agent Teams** | Claude Code Teams | Team lead brief with TeamCreate/TaskCreate delegation plan |
 | **Agent SDK** | Anthropic Agent SDK | Python skeleton with agent configs and async orchestration |
 | **Claude Prompt** | Claude.ai / API | Step-by-step role-based prompt for single-agent execution |
+| **Manifest** | Portability & sharing | TOON v1 workflow definition — git-committable, diff-friendly |
+
+## Memory Protocol
+
+Toggle **Enable workflow memory** in the sidebar to inject a compaction-resilient memory system into exported prompts. When enabled:
+
+- Each agent reads memory files **before** starting work (step zero)
+- Each agent writes progress + breadcrumb **after** completing work (final step)
+- Compaction recovery is automatic — agents detect missing breadcrumbs and re-read state from disk
+- Inter-agent communication flows through `shared.md` using TOON notation
+- Memory files: `manifest.md` (read-only), `shared.md` (append-only), `@{agent}.md` (per-agent)
+
+No install required — the memory protocol is embedded directly in the generated prompts.
 
 ## Built-in Presets
 
@@ -44,6 +58,8 @@ A visual, interactive playground for designing AI agent workflows from Jira tick
 - **Smart story detection** - auto-generates appropriate workflow from story keywords
 - **Decision gate integration** - downstream decisions are embedded as success criteria in agent prompts
 - **Workflow-aware prompts** - agents know their upstream dependencies and downstream consumers
+- **Memory Protocol** - optional compaction-resilient memory with TOON v1 notation
+- **TOON Manifest** - portable, git-friendly workflow definition format
 - **Custom workflows** - add your own nodes and connections; export generators add smart scaffolding automatically
 - **Model selection** - Sonnet 4.5/4.6, Opus 4.5/4.6, Haiku 4.5 with correct Task tool keys
 
@@ -59,10 +75,12 @@ Each export format generates workflow-aware prompts that include:
 
 - **Role context** - what the agent is responsible for
 - **Tool awareness** - which tools are available
+- **Memory read** (when enabled) - check breadcrumbs, recover from compaction
 - **Task methodology** - numbered steps with clear deliverables
 - **Input dependencies** - output from upstream agents to review
 - **Success gates** - downstream decision criteria baked into the agent prompt
 - **Output format** - structured response guidance for the next step
+- **Memory write** (when enabled) - persist progress, hand off via shared.md, write breadcrumb
 - **Full requirements** - the complete story/ticket, never truncated
 
 This means agents know their place in the pipeline and produce output that the next agent can act on immediately.

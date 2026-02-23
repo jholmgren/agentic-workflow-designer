@@ -702,7 +702,60 @@ function genMemoryProtocol() {
   return p.join('\n');
 }
 
-// Per-agent memory block for embedding inside Task() prompts
+// Per-agent memory preamble — injected BEFORE the task (step zero)
+function genAgentMemoryPreamble(agentLabel) {
+  const path = getMemoryPath();
+  const wfName = getName() || 'workflow';
+  const slug = slugify(agentLabel);
+  const p = [];
+  p.push('## Step 0: Read Memory (CRITICAL — DO FIRST)');
+  p.push('');
+  p.push('**Before doing ANYTHING else, check your memory.**');
+  p.push('');
+  p.push('1. Look for `<!-- WF_BC: ' + wfName + ' @' + slug + ' ... -->` in your context');
+  p.push('   - If **MISSING** → compaction occurred → **STOP ALL WORK** and read:');
+  p.push('     - `' + path + 'manifest.md` (workflow definition)');
+  p.push('     - `' + path + 'shared.md` (inter-agent communication)');
+  p.push('     - `' + path + '@' + slug + '.md` (your own progress)');
+  p.push('   - Find your last entry by timestamp to know where you left off');
+  p.push('   - If **PRESENT** → context intact, proceed to your task');
+  p.push('2. Read `' + path + 'shared.md` for upstream handoffs addressed to you (`→ @' + slug + ':`)');
+  return p.join('\n');
+}
+
+// Per-agent memory postamble — injected AFTER the output format (final mandatory steps)
+function genAgentMemoryPostamble(agentLabel) {
+  const path = getMemoryPath();
+  const wfName = getName() || 'workflow';
+  const slug = slugify(agentLabel);
+  const p = [];
+  p.push('## Final Steps (MANDATORY — DO NOT SKIP)');
+  p.push('');
+  p.push('**After completing your task, you MUST do ALL of the following:**');
+  p.push('');
+  p.push('1. **Write progress** — append a TOON entry to `' + path + '@' + slug + '.md`:');
+  p.push('```');
+  p.push('## @' + slug + ' | {ISO-timestamp} | {status-emoji}');
+  p.push('d: {what you decided or did}');
+  p.push('f: {files changed — path:action}');
+  p.push('→ {what downstream agents need to know}');
+  p.push('← {what you built upon from upstream}');
+  p.push('!: {blockers or critical issues}');
+  p.push('💡: {insights worth preserving}');
+  p.push('```');
+  p.push('');
+  p.push('2. **Hand off** — append to `' + path + 'shared.md`:');
+  p.push('   `→ @{next-agent}: {what they need from you}`');
+  p.push('');
+  p.push('3. **Breadcrumb** — end your response with:');
+  p.push('   `<!-- WF_BC: ' + wfName + ' @' + slug + ' {ISO-timestamp} -->`');
+  p.push('');
+  p.push('Status: ✅done 🔄active 🚧blocked ❌failed ⚠️warning 💡insight');
+  p.push('Sigils: @agent #ticket !critical f:file d:decision →next ←depends');
+  return p.join('\n');
+}
+
+// DEPRECATED — use genAgentMemoryPreamble + genAgentMemoryPostamble above
 function genAgentMemoryBlock(agentLabel) {
   const path = getMemoryPath();
   const wfName = getName() || 'workflow';
@@ -2092,6 +2145,11 @@ function genSubAgents() {
     }
     promptLines.push('');
 
+    if (state.memoryEnabled) {
+      promptLines.push(genAgentMemoryPreamble(node.label));
+      promptLines.push('');
+    }
+
     // Task instructions - always present via getEffectivePrompt fallback
     promptLines.push('## Your Task');
     promptLines.push(getEffectivePrompt(node));
@@ -2151,7 +2209,7 @@ function genSubAgents() {
 
     if (state.memoryEnabled) {
       promptLines.push('');
-      promptLines.push(genAgentMemoryBlock(node.label));
+      promptLines.push(genAgentMemoryPostamble(node.label));
     }
 
     p.push(promptLines.join('\n'));
@@ -2248,6 +2306,16 @@ function genAgentTeams() {
     lines.push(`${pre}- Tools: ${node.config.tools.join(', ')}`);
     lines.push(`${pre}- Max turns: ${node.config.maxTurns}`);
 
+    // Memory READ — before task (step zero)
+    if (state.memoryEnabled) {
+      const _slug = slugify(node.label);
+      const _wf = getName() || 'workflow';
+      lines.push('');
+      lines.push(pre + '- **Memory — READ FIRST (CRITICAL)**: Before starting any work:');
+      lines.push(pre + '  1. Check for breadcrumb `<!-- WF_BC: ' + _wf + ' @' + _slug + ' ... -->` — if missing, read `' + getMemoryPath() + 'manifest.md`, `shared.md`, and `@' + _slug + '.md` immediately');
+      lines.push(pre + '  2. Read `' + getMemoryPath() + 'shared.md` for upstream handoffs addressed to `@' + _slug + '`');
+    }
+
     // Task description - always comprehensive via getEffectivePrompt fallback
     const effectivePrompt = getEffectivePrompt(node);
     lines.push(`${pre}- **Task**:`);
@@ -2272,16 +2340,15 @@ function genAgentTeams() {
       });
     }
 
+    // Memory WRITE — after task (final mandatory steps)
     if (state.memoryEnabled) {
       const _slug = slugify(node.label);
       const _wf = getName() || 'workflow';
       lines.push('');
-      lines.push(pre + '- **Memory (CRITICAL)**: This agent MUST on every turn:');
-      lines.push(pre + '  1. Read `' + getMemoryPath() + 'shared.md` on start (inter-agent communication from upstream)');
-      lines.push(pre + '  2. Write progress to `' + getMemoryPath() + '@' + _slug + '.md` using TOON notation after each significant action');
-      lines.push(pre + '  3. Append handoff to `shared.md` on completion (for downstream agents)');
-      lines.push(pre + '  4. End every response with: `<!-- WF_BC: ' + _wf + ' @' + _slug + ' {ISO} -->`');
-      lines.push(pre + '  5. After compaction (breadcrumb missing): read `manifest.md` + `shared.md` + `@' + _slug + '.md` immediately');
+      lines.push(pre + '- **Memory — WRITE LAST (MANDATORY)**: After completing work:');
+      lines.push(pre + '  1. Write TOON progress entry to `' + getMemoryPath() + '@' + _slug + '.md`');
+      lines.push(pre + '  2. Append handoff to `' + getMemoryPath() + 'shared.md` with `→ @{next-agent}: {what they need}`');
+      lines.push(pre + '  3. End response with `<!-- WF_BC: ' + _wf + ' @' + _slug + ' {ISO} -->`');
     }
 
     return lines;

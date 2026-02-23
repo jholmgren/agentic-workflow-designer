@@ -17,15 +17,16 @@ The Agentic Workflow Designer is a **visual, browser-based playground** that bri
 2. Click **Generate Workflow** (or pick a preset, or build manually)
 3. The canvas populates with agent nodes connected in the right order
 4. Optionally reconfigure each node (agent type, model, tools, custom prompt)
-5. Select an export format tab and click **Copy**
-6. Paste the output into Claude Code or the Agent SDK — ready to run
+5. Toggle **Memory Protocol** on/off as needed
+6. Select an export format tab and click **Copy**
+7. Paste the output into Claude Code or the Agent SDK — ready to run
 
 ---
 
 ## Architecture
 
 ### Single-File Design
-The entire application is a **single `index.html` file** (~2,400 lines). There is no build step, no server, no dependencies. Open the file in a browser and it works. This is intentional — it keeps the tool portable, shareable as a GitHub link, and trivially deployable as a static page.
+The entire application is a **single `index.html` file** (~2,800 lines). There is no build step, no server, no dependencies. Open the file in a browser and it works. This is intentional — it keeps the tool portable, shareable as a GitHub link, and trivially deployable as a static page.
 
 ### Layout Grid
 ```
@@ -35,7 +36,7 @@ The entire application is a **single `index.html` file** (~2,400 lines). There i
 │   (320px)    │                                  │
 │              ├──────────────────────────────────┤
 │              │      Prompt Output Panel         │
-│              │   (5 export format tabs)         │
+│              │   (6 export format tabs)         │
 └──────────────┴──────────────────────────────────┘
 ```
 
@@ -49,7 +50,8 @@ state = {
   mode: 'select',     // 'select' | 'connect' | 'delete'
   pan: { x, y },      // Canvas viewport offset
   zoom: 1,            // Canvas zoom level (0.2–3)
-  exportFormat: 'prompt'
+  exportFormat: 'prompt',
+  memoryEnabled: false // Memory Protocol toggle
 }
 ```
 No frameworks, no reactive libraries. Each user action calls `render()` which does a full DOM diff-free re-render of the SVG canvas and triggers `updatePrompt()`.
@@ -109,10 +111,10 @@ Each template is structured with numbered steps, expected outputs, and output fo
 A `##` header-structured document with numbered steps, agent roles, parallel execution notes, decision points, and expected deliverables. Best for pasting into a Claude.ai conversation as a planning prompt.
 
 ### 2. Sub-Agents (Claude Code Task Tool)
-Generates markdown with embedded `Task(subagent_type=..., model=..., prompt=...)` pseudocode blocks. Each agent block includes a self-contained prompt with role, tools, task instructions, dependency context, success gates, downstream awareness, and requirements. Best for use in Claude Code.
+Generates markdown with embedded `Task(subagent_type=..., model=..., prompt=...)` pseudocode blocks. Each agent block includes a self-contained prompt with role, tools, task instructions, dependency context, success gates, downstream awareness, and requirements. When memory is enabled, each prompt includes a **Step 0: Read Memory** preamble and a **Final Steps** postamble. Best for use in Claude Code.
 
 ### 3. Agent Teams (Preview)
-Generates a "team lead brief" for use with the experimental Claude Code Agent Teams feature (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`). Includes TeamCreate setup, parallel spawn instructions, and explicit dependency handoff guidance.
+Generates a "team lead brief" for use with the experimental Claude Code Agent Teams feature (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`). Includes TeamCreate setup, parallel spawn instructions, and explicit dependency handoff guidance. When memory is enabled, each teammate block includes **READ FIRST** instructions before the task and **WRITE LAST** instructions after.
 
 ### 4. Agent SDK (Python)
 Generates Python code using the Anthropic Agent SDK patterns. Includes model family mapping (e.g., `claude-sonnet-4-5-20251001`), tool lists, and agent prompt construction. Useful for programmatic workflow execution.
@@ -120,12 +122,63 @@ Generates Python code using the Anthropic Agent SDK patterns. Includes model fam
 ### 5. Claude Prompt
 A conversational prompt suitable for Claude.ai, structured as a role-assignment prompt with the full workflow described in natural language.
 
+### 6. Manifest (TOON v1)
+A portable, git-committable workflow definition using Token-Optimized Orchestration Notation. Contains the workflow name, story, agent graph, connection topology, parallel groups, decisions, outputs, memory path, and TOON key. Designed for sharing between colleagues, diffing across iterations, and machine-readable workflow portability.
+
 ### Topology Awareness in Exports
 All generators use `topologicalSort()` to process nodes in dependency order. Each agent's export block includes:
 - Input from upstream nodes (dependency context)
 - Success gate info if a Decision node follows it
 - Downstream awareness so the agent knows who reads its output
 - The full Jira/user story as a `## Requirements` section
+
+---
+
+## Memory Protocol
+
+### Overview
+The Memory Protocol is an optional system that makes agent workflows resilient to context compaction. When enabled via the sidebar toggle, all export formats inject structured memory instructions that tell agents how to persist their work to disk and recover from context loss.
+
+### Design Principle: Structural Injection Order
+Memory instructions are **structurally embedded** in each agent's prompt flow — not appended as an afterthought:
+
+1. **Read-first (Step 0)**: Memory read instructions appear **before** the task, ensuring agents check for compaction recovery before doing any work
+2. **Write-last (Final Steps)**: Memory write instructions appear **after** the output format, ensuring agents persist progress and breadcrumbs as their final mandatory action
+
+This ordering maximizes the probability that agents follow memory instructions even under heavy task load.
+
+### TOON v1 (Token-Optimized Orchestration Notation)
+A compact structured notation for agent memory and inter-agent communication:
+
+| Category | Symbols |
+|----------|---------|
+| **Status** | ✅done 🔄active 🚧blocked ❌failed ⚠️warning 💡insight |
+| **Sigils** | @agent #ticket !critical f:file s:symbol fn:function t:type d:decision |
+| **Flow** | →next ←depends ↑escalate ↓delegate ∥parallel |
+| **References** | [@agent:step] for cross-agent citations |
+| **Entry format** | `## @name \| ISO-ts \| status-emoji` then `d:` `f:` `→` `←` `!:` `💡:` lines |
+
+### Memory Files
+Three file types stored at `~/.workflow-memory/{workflow-slug}/`:
+
+| File | Access | Purpose |
+|------|--------|---------|
+| `manifest.md` | Read-only | Workflow definition (from Manifest export) |
+| `shared.md` | Append-only | Inter-agent communication channel |
+| `@{agent}.md` | Read/write (owning agent) | Per-agent progress and state |
+
+### Compaction Recovery
+Each agent ends every response with a breadcrumb comment:
+```
+<!-- WF_BC: {workflow} @{agent} {ISO-timestamp} -->
+```
+If an agent's previous breadcrumb is missing from context, compaction has occurred. The agent reads `manifest.md` + `shared.md` + `@{agent}.md` to recover full context before resuming work.
+
+### Inter-Agent Communication
+Downstream agents read `shared.md` to get upstream handoffs. Agents address each other with:
+```
+→ @{next-agent}: {what they need to know}
+```
 
 ---
 
@@ -193,6 +246,9 @@ After generation, `autoLayout()` is called to arrange nodes cleanly.
 | Drag uses delta-based screen coordinates | Prevents coordinate transform bugs when canvas is panned/zoomed |
 | Topological sort for export ordering | Ensures agents are always exported in dependency order regardless of canvas position |
 | getEffectivePrompt 3-tier fallback | Ensures every export always contains real instructions even for blank-prompt nodes |
+| Memory preamble/postamble split | Read-before-task + write-after-task ordering maximizes compliance vs. a single appended block |
+| TOON v1 for memory files | Compact notation reduces token usage in agent context while preserving structured state |
+| Manifest as 6th format | Portable workflow definition enables sharing, diffing, and reproducibility |
 
 ---
 
@@ -205,6 +261,7 @@ After generation, `autoLayout()` is called to arrange nodes cleanly.
 - **Agent SDK export is pseudocode**: The Python output requires manual adaptation to real SDK patterns
 - **Decision routing in exports is informational**: The export describes decision gates but doesn't generate conditional execution code
 - **Single canvas**: No support for multiple workflow tabs or saved workflow library
+- **Memory is prompt-only**: No deterministic pre-compaction hook exists; agents rely on frequent writes and breadcrumb detection
 
 ### High-Value Future Features
 1. **Save/Load**: Serialize state to JSON and persist in localStorage or allow import/export as `.workflow.json`
@@ -217,6 +274,7 @@ After generation, `autoLayout()` is called to arrange nodes cleanly.
 8. **Node notes preview**: Show truncated notes on the canvas node itself
 9. **Connection labels**: Click a connection to add a label (currently only auto-set on Decision pass/fail)
 10. **Import from Jira API**: Fetch ticket content directly via Jira REST API
+11. **Claude Code hooks integration**: Use hooks for deterministic pre-compaction memory writes (v2 memory)
 
 ---
 
@@ -224,7 +282,7 @@ After generation, `autoLayout()` is called to arrange nodes cleanly.
 
 ```
 agentic-workflow-designer/
-├── index.html       # The entire application (~2,400 lines)
+├── index.html       # The entire application (~2,800 lines)
 ├── TECHNICAL.md     # This document
 ├── README.md        # User-facing overview
 ├── LICENSE          # MIT
@@ -233,25 +291,37 @@ agentic-workflow-designer/
 
 The `index.html` is internally organized into clearly delimited sections:
 ```
-CSS styles (lines 7–188)
-HTML structure (lines 190–380)
+CSS styles (lines 7–204)
+HTML structure (lines 206–400)
 JavaScript:
-  ├── STATE & CONSTANTS (lines 382–524)
-  ├── SVG HELPERS (lines 526–548)
-  ├── RENDERING (lines 550–780)
-  ├── NODE OPERATIONS (lines 782–963)
-  ├── CONFIGURATION PANEL (lines 965–1065)
-  ├── INTERACTION HANDLERS (lines 1082–1255)
-  ├── MODE & ZOOM (lines 1257–1295)
-  ├── AUTO LAYOUT (lines 1297–1351)
-  ├── STORY PARSING & WORKFLOW GENERATION (lines 1353–1512)
-  ├── PRESETS (lines 1514–1597)
-  └── EXPORT FORMAT SYSTEM (lines 1609–end)
+  ├── STATE & CONSTANTS (lines 402–582)
+  │     ├── NODE_DEFAULTS, AGENT_TYPES, ALL_TOOLS, MODELS
+  │     ├── Atlassian URL detection
+  │     ├── AGENT_TYPE_PROMPT_MAP, getEffectivePrompt()
+  │     └── PROMPTS library (25+ templates)
+  ├── TOON v1 + MEMORY HELPERS (lines 584–802)
+  │     ├── TOON_KEY constant
+  │     ├── slugify(), getMemoryPath()
+  │     ├── toggleMemory(), updateMemoryPath()
+  │     ├── genMemoryProtocol()        — orchestrator-level memory block
+  │     ├── genAgentMemoryPreamble()   — per-agent read-first (step 0)
+  │     └── genAgentMemoryPostamble()  — per-agent write-last (final steps)
+  ├── SVG HELPERS (lines 804–822)
+  ├── RENDERING (lines 822–960)
+  ├── NODE OPERATIONS (lines 960–1140)
+  ├── CONFIGURATION PANEL (lines 1140–1260)
+  ├── INTERACTION HANDLERS (lines 1260–1430)
+  ├── MODE & ZOOM (lines 1430–1470)
+  ├── AUTO LAYOUT (lines 1470–1530)
+  ├── STORY PARSING & WORKFLOW GENERATION (lines 1530–1690)
+  ├── PRESETS (lines 1690–1780)
+  └── EXPORT FORMAT SYSTEM (lines 1790–end)
        ├── genWorkflow()      — Format 1: Workflow Markdown
        ├── genSubAgents()     — Format 2: Sub-Agent Task calls
        ├── genAgentTeams()    — Format 3: Agent Teams brief
        ├── genAgentSDK()      — Format 4: Python SDK code
-       └── genClaudePrompt()  — Format 5: Claude conversational prompt
+       ├── genClaudePrompt()  — Format 5: Claude conversational prompt
+       └── genManifest()      — Format 6: TOON v1 Manifest
 ```
 
 ---
@@ -262,6 +332,7 @@ JavaScript:
 - **Render on demand**: Call `render()` and `updatePrompt()` after any state mutation
 - **Export completeness**: Every export format must include the full user story as context — never assume the recipient has seen it
 - **Prompt quality first**: The quality of exported prompts is the product's core value proposition. `getEffectivePrompt()` and the `PROMPTS` library are the most important code in the file
+- **Memory injection order**: Preamble (read) before task, postamble (write) after output format. Never append memory as an afterthought at the end
 - **Test with real Jira tickets**: The keyword detection in `generateFromStory()` was tuned for real-world ticket language — validate changes against diverse examples
 - **Model IDs**: Keep `MODELS` array in sync with current Anthropic model availability; the `family` field is used for SDK code generation
 
