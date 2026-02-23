@@ -191,6 +191,16 @@ svg.canvas{width:100%;height:100%;display:block}
   display:flex;gap:8px;align-items:flex-start;font-size:11px;line-height:1.5;color:var(--text2)}
 .sidebar-tip .tip-icon{font-size:13px;flex-shrink:0;margin-top:1px}
 .sidebar-tip strong{color:#f59e0b;font-weight:600}
+/* Memory toggle */
+.memory-section .memory-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;
+  color:var(--text2)}
+.memory-section .memory-toggle input[type="checkbox"]{accent-color:var(--accent);width:14px;height:14px;
+  cursor:pointer;flex-shrink:0}
+.memory-section .memory-path{margin-top:8px;padding:6px 8px;background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--radius-sm);font-family:var(--mono);font-size:10px;color:var(--text2);
+  word-break:break-all;line-height:1.4}
+.memory-section .memory-path-label{font-size:10px;color:var(--text3);text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:4px;display:block}
 </style>
 </head>
 <body>
@@ -205,7 +215,7 @@ svg.canvas{width:100%;height:100%;display:block}
 
   <div class="sidebar-section">
     <h3>Workflow Name</h3>
-    <input type="text" id="workflowName" class="story-input" style="min-height:auto;padding:8px 10px;font-family:var(--font);font-weight:600" placeholder="e.g. PROJ-123 User Auth Flow" oninput="updatePrompt()"/>
+    <input type="text" id="workflowName" class="story-input" style="min-height:auto;padding:8px 10px;font-family:var(--font);font-weight:600" placeholder="e.g. PROJ-123 User Auth Flow" oninput="updateMemoryPath();updatePrompt()"/>
   </div>
 
   <div class="sidebar-section">
@@ -283,6 +293,18 @@ svg.canvas{width:100%;height:100%;display:block}
   <div class="sidebar-tip">
     <span class="tip-icon">⚡</span>
     <span><strong>Better outcomes</strong> — agents work best when an Atlassian MCP tool and a language-appropriate LSP server are installed, authenticated, and available.</span>
+  </div>
+
+  <div class="sidebar-section memory-section">
+    <h3>Memory Protocol</h3>
+    <label class="memory-toggle">
+      <input type="checkbox" id="memoryToggle" onchange="toggleMemory()"/>
+      <span>Enable workflow memory</span>
+    </label>
+    <div id="memoryPathField" style="display:none;margin-top:8px">
+      <span class="memory-path-label">Memory Path</span>
+      <div class="memory-path" id="memoryPathDisplay">~/.workflow-memory/untitled/</div>
+    </div>
   </div>
 
   <div class="sidebar-section config-panel" id="configPanel">
@@ -370,6 +392,7 @@ svg.canvas{width:100%;height:100%;display:block}
       <button class="format-tab" data-format="teams" onclick="setExportFormat('teams')">Agent Teams<span class="tab-badge">Preview</span></button>
       <button class="format-tab" data-format="sdk" onclick="setExportFormat('sdk')">Agent SDK<span class="tab-badge">Python</span></button>
       <button class="format-tab" data-format="claude" onclick="setExportFormat('claude')">Claude Prompt</button>
+      <button class="format-tab" data-format="manifest" onclick="setExportFormat('manifest')">Manifest<span class="tab-badge">TOON</span></button>
     </div>
     <div class="prompt-actions">
       <button class="btn sm primary" onclick="copyPrompt()">Copy</button>
@@ -554,8 +577,106 @@ let state = {
   isPanning: false,
   panStart: { x: 0, y: 0 },
   mousePos: { x: 0, y: 0 },
-  exportFormat: 'prompt'
+  exportFormat: 'prompt',
+  memoryEnabled: false
 };
+
+// ═══════════════════════════════════════════════════════════
+// TOON v1 (Token-Optimized Orchestration Notation) + MEMORY HELPERS
+// ═══════════════════════════════════════════════════════════
+const TOON_KEY = [
+  '## TOON v1 Key (Token-Optimized Orchestration Notation)',
+  'Status: ✅done 🔄active 🚧blocked ❌failed ⚠️warning 💡insight',
+  'Sigils: @agent #ticket !critical f:file s:symbol fn:function t:type d:decision',
+  'Flow: →next ←depends ↑escalate ↓delegate ∥parallel',
+  'Ref: [@agent:step] for cross-agent citations',
+  'Entry: ## @name | ISO-ts | status-emoji  then d: f: → ← !: 💡: lines'
+].join('\n');
+
+function slugify(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled';
+}
+
+function getMemoryPath() {
+  return '~/.workflow-memory/' + slugify(getName() || 'untitled') + '/';
+}
+
+function toggleMemory() {
+  state.memoryEnabled = $('memoryToggle').checked;
+  $('memoryPathField').style.display = state.memoryEnabled ? 'block' : 'none';
+  updateMemoryPath();
+  updatePrompt();
+}
+
+function updateMemoryPath() {
+  const el = $('memoryPathDisplay');
+  if (el) el.textContent = getMemoryPath();
+}
+
+// Full memory protocol block for orchestrator-level prompts
+function genMemoryProtocol() {
+  const path = getMemoryPath();
+  const wfName = getName() || 'workflow';
+  const p = [];
+  p.push('---');
+  p.push('## Memory Protocol');
+  p.push('');
+  p.push('This workflow uses persistent memory for context continuity across turns, agent handoffs, and compaction events.');
+  p.push('');
+  p.push('**Memory path**: `' + path + '`');
+  p.push('**Breadcrumb format**: `<!-- WF_BC: ' + wfName + ' @{agent} {ISO-timestamp} -->`');
+  p.push('');
+  p.push('### Setup');
+  p.push('Before starting the first agent, save the Manifest (from the Manifest tab) to `' + path + 'manifest.md`.');
+  p.push('');
+  p.push('### File Structure');
+  p.push('- `manifest.md` — Workflow definition (read-only reference, saved once before execution)');
+  p.push('- `shared.md` — Shared progress log (append-only, all agents write here on completion)');
+  p.push('- `@{agent-name}.md` — Per-agent state file (owned by that agent)');
+  p.push('');
+  p.push('### Agent Instructions');
+  p.push('Each agent must:');
+  p.push('1. **On start**: Read `' + path + 'shared.md` and their own `@name.md` if they exist');
+  p.push('2. **During work**: Write key decisions and progress to their `@name.md` using TOON format');
+  p.push('3. **On completion**: Append a handoff entry to `shared.md` with TOON summary');
+  p.push('4. **Every response**: End with breadcrumb: `<!-- WF_BC: ' + wfName + ' @{name} {ISO} -->`');
+  p.push('5. **After compaction** (previous `<!-- WF_BC -->` missing from context): Read `manifest.md`, `shared.md`, and own `@name.md` immediately before resuming');
+  p.push('');
+  p.push('### TOON Entry Format');
+  p.push('```');
+  p.push('## @{agent} | {ISO-timestamp} | {status-emoji}');
+  p.push('d: {key decision or action taken}');
+  p.push('f: {files changed — path:summary}');
+  p.push('→ {what the next agent needs to know}');
+  p.push('← {what this built upon}');
+  p.push('!: {blockers or critical issues}');
+  p.push('💡: {insights worth preserving}');
+  p.push('```');
+  p.push('');
+  p.push(TOON_KEY);
+  return p.join('\n');
+}
+
+// Brief per-agent memory block for embedding inside Task() prompts
+function genAgentMemoryBlock(agentLabel) {
+  const path = getMemoryPath();
+  const wfName = getName() || 'workflow';
+  const slug = slugify(agentLabel);
+  const p = [];
+  p.push('## Memory Protocol');
+  p.push('Memory path: `' + path + '`');
+  p.push('Your memory file: `' + path + '@' + slug + '.md`');
+  p.push('Shared log: `' + path + 'shared.md`');
+  p.push('');
+  p.push('1. **On start**: Read `shared.md` and `@' + slug + '.md` if they exist for prior context');
+  p.push('2. **During work**: Append progress to `@' + slug + '.md` using TOON format');
+  p.push('3. **On completion**: Append handoff summary to `shared.md`');
+  p.push('4. **Every response**: End with: `<!-- WF_BC: ' + wfName + ' @' + slug + ' {ISO-timestamp} -->`');
+  p.push('5. **After compaction** (previous `<!-- WF_BC -->` missing): Read `manifest.md`, `shared.md`, and `@' + slug + '.md` immediately, then resume');
+  p.push('');
+  p.push('TOON entry: `## @' + slug + ' | {ts} | {status}` then `d:` `f:` `→` `←` `!:` `💡:` lines');
+  return p.join('\n');
+}
 
 // ═══════════════════════════════════════════════════════════
 // SVG HELPERS
@@ -1658,12 +1779,13 @@ function updatePrompt() {
       subagent: 'Design your workflow to generate Claude Code sub-agent calls...',
       teams: 'Design your workflow to generate an Agent Teams delegation brief...',
       sdk: 'Design your workflow to generate Agent SDK Python code...',
-      claude: 'Design your workflow to generate a Claude prompt...'
+      claude: 'Design your workflow to generate a Claude prompt...',
+      manifest: 'Design your workflow to generate a portable TOON manifest...'
     };
     out.textContent = hints[state.exportFormat] || hints.prompt;
     return;
   }
-  const generators = { prompt: genWorkflow, subagent: genSubAgents, teams: genAgentTeams, sdk: genAgentSDK, claude: genClaudePrompt };
+  const generators = { prompt: genWorkflow, subagent: genSubAgents, teams: genAgentTeams, sdk: genAgentSDK, claude: genClaudePrompt, manifest: genManifest };
   out.textContent = (generators[state.exportFormat] || genWorkflow)();
 }
 
@@ -1809,6 +1931,12 @@ function genWorkflow() {
   p.push('- At each decision point, evaluate the agent output against the criteria before proceeding');
   if (parallels.length > 0) p.push('- Launch parallel steps simultaneously using multiple Task calls in the same message');
   p.push('- Review each agent output before passing it downstream');
+
+  if (state.memoryEnabled) {
+    p.push('');
+    p.push(genMemoryProtocol());
+  }
+
   return p.join('\n');
 }
 
@@ -1837,6 +1965,16 @@ function genSubAgents() {
   }
   const _saAtl = atlassianHint(getWorkflowAtlassianUrls());
   if (_saAtl) { p.push(_saAtl); p.push(''); }
+
+  if (state.memoryEnabled) {
+    p.push('## Memory System');
+    p.push('');
+    p.push('This workflow uses persistent memory. Before starting:');
+    p.push('1. Save the Manifest (from the Manifest tab) to `' + getMemoryPath() + 'manifest.md`');
+    p.push('2. Each agent writes to `' + getMemoryPath() + '@{name}.md` and reads `' + getMemoryPath() + 'shared.md`');
+    p.push('3. Agents include breadcrumb comments (`<!-- WF_BC: ... -->`) for compaction recovery');
+    p.push('');
+  }
 
   p.push('## Execution Plan');
   p.push('');
@@ -1931,6 +2069,11 @@ function genSubAgents() {
       promptLines.push('3. Key deliverables or results');
     }
     promptLines.push('4. Any concerns, risks, or blockers for the next step');
+
+    if (state.memoryEnabled) {
+      promptLines.push('');
+      promptLines.push(genAgentMemoryBlock(node.label));
+    }
 
     p.push(promptLines.join('\n'));
     p.push('")');
@@ -2050,6 +2193,11 @@ function genAgentTeams() {
       });
     }
 
+    if (state.memoryEnabled) {
+      lines.push('');
+      lines.push(pre + '- **Memory**: Write progress to `' + getMemoryPath() + '@' + slugify(node.label) + '.md`, read `shared.md` for prior context');
+    }
+
     return lines;
   }
 
@@ -2122,6 +2270,11 @@ function genAgentTeams() {
   p.push('5. At decision gates, evaluate the output and either proceed or re-assign with feedback');
   p.push('6. If a teammate gets stuck or produces poor output, provide guidance and re-scope');
   p.push('7. When all steps complete, send shutdown_request to all teammates and report final status');
+
+  if (state.memoryEnabled) {
+    p.push('');
+    p.push(genMemoryProtocol());
+  }
 
   return p.join('\n');
 }
@@ -2254,6 +2407,23 @@ function genAgentSDK() {
   p.push('if __name__ == "__main__":');
   p.push(`    result = asyncio.run(run_${safeName}())`);
   p.push('    print("Workflow complete:", result)');
+
+  if (state.memoryEnabled) {
+    p.push('');
+    p.push('');
+    p.push('# ' + '═'.repeat(59));
+    p.push('# MEMORY PROTOCOL');
+    p.push('# ' + '═'.repeat(59));
+    p.push('# This workflow uses persistent memory at: ' + getMemoryPath());
+    p.push('# Save the Manifest to: ' + getMemoryPath() + 'manifest.md');
+    p.push('# Each agent writes to @{name}.md and reads shared.md');
+    p.push('# Breadcrumb: <!-- WF_BC: ' + (getName() || 'workflow') + ' @{agent} {ISO} -->');
+    p.push('# After compaction (missing breadcrumb): read manifest.md + shared.md + @name.md');
+    p.push('#');
+    p.push('# TOON entry format:');
+    p.push('#   ## @{agent} | {ISO-ts} | {status-emoji}');
+    p.push('#   d: {decision}  f: {files}  →{next}  ←{depends}  !:{critical}  💡:{insight}');
+  }
 
   return p.join('\n');
 }
@@ -2399,6 +2569,115 @@ function genClaudePrompt() {
   p.push('Work through each step sequentially, showing your complete work for each phase.');
   p.push('Do not skip steps or combine them. At each decision checkpoint, explicitly state');
   p.push('whether the criteria is met before continuing. Present the final deliverables at the end.');
+
+  if (state.memoryEnabled) {
+    p.push('');
+    p.push(genMemoryProtocol());
+  }
+
+  return p.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════
+// FORMAT 6: Manifest (portable TOON workflow definition)
+// ═══════════════════════════════════════════════════════════
+function genManifest() {
+  const story = getStory(), name = getName();
+  const ordered = topologicalSort();
+  const agents = ordered.filter(n => n.type === 'agent');
+  const decisions = ordered.filter(n => n.type === 'decision');
+  const parallels = ordered.filter(n => n.type === 'parallel');
+  const outputs = ordered.filter(n => n.type === 'output');
+  const p = [];
+
+  p.push('# Workflow Manifest' + (name ? ': ' + name : ''));
+  p.push('#created: ' + new Date().toISOString());
+  p.push('#toon: v1');
+  p.push('');
+
+  // Story
+  p.push('## Story');
+  p.push(story || '(No story provided)');
+  p.push('');
+
+  // Atlassian references
+  const atlUrls = getWorkflowAtlassianUrls();
+  if (atlUrls.length > 0) {
+    p.push('## Atlassian References');
+    atlUrls.forEach(u => p.push('- ' + u));
+    p.push('');
+  }
+
+  // Agents in TOON format
+  if (agents.length > 0) {
+    p.push('## Agents');
+    agents.forEach(node => {
+      const slug = slugify(node.label);
+      const at = node.config.agentType;
+      const tools = node.config.tools.join(',');
+      p.push('@' + slug + ' | ' + at + ' | ' + node.config.model + ' | tools:[' + tools + '] | turns:' + node.config.maxTurns);
+      const prompt = getEffectivePrompt(node);
+      const firstLine = prompt.split('\n')[0].substring(0, 100);
+      p.push('  prompt: ' + firstLine + (prompt.split('\n')[0].length > 100 ? '...' : ''));
+      if (node.config.notes && node.config.notes.trim()) {
+        p.push('  notes: ' + node.config.notes.trim().split('\n')[0]);
+      }
+    });
+    p.push('');
+  }
+
+  // Graph
+  if (state.connections.length > 0) {
+    p.push('## Graph');
+    state.connections.forEach(c => {
+      const from = state.nodes.find(n => n.id === c.from);
+      const to = state.nodes.find(n => n.id === c.to);
+      if (from && to) {
+        const label = c.label ? ' [' + c.label + ']' : '';
+        p.push(from.label + ' \u2192 ' + to.label + label);
+      }
+    });
+    p.push('');
+  }
+
+  // Parallel groups
+  if (parallels.length > 0) {
+    p.push('## Parallel Groups');
+    parallels.forEach(par => {
+      const children = state.connections.filter(c => c.from === par.id).map(c => {
+        const n = state.nodes.find(nd => nd.id === c.to);
+        return n ? n.label : null;
+      }).filter(Boolean);
+      p.push('\u2225 ' + par.label + ': [' + children.join(', ') + '] (' + (par.config.strategy || 'all') + ')');
+    });
+    p.push('');
+  }
+
+  // Decisions
+  if (decisions.length > 0) {
+    p.push('## Decisions');
+    decisions.forEach(d => {
+      p.push('? ' + d.label + ': ' + (d.config.condition || 'evaluate') + ' \u2192 ' + (d.config.yesLabel || 'Yes') + '/' + (d.config.noLabel || 'No'));
+    });
+    p.push('');
+  }
+
+  // Outputs
+  if (outputs.length > 0) {
+    p.push('## Outputs');
+    outputs.forEach(o => {
+      p.push('\u{1F4E6} ' + o.label + ': ' + (o.config.deliverable || 'deliverable') + ' (' + o.config.format + ')');
+    });
+    p.push('');
+  }
+
+  // Memory path
+  p.push('## Memory Path');
+  p.push(getMemoryPath());
+  p.push('');
+
+  // TOON key
+  p.push(TOON_KEY);
 
   return p.join('\n');
 }
