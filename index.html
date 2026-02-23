@@ -2878,6 +2878,52 @@ function copyPrompt() {
 // ═══════════════════════════════════════════════════════════
 updateTransform();
 render();
+
+(function() {
+  const COMPANION_ORIGIN = 'chrome-extension://'; // partial match — see handler
+
+  window.addEventListener('message', function(event) {
+    // Accept messages from any chrome-extension:// origin (our side panel)
+    if (!event.origin.startsWith('chrome-extension://')) return;
+    if (event.data?.type !== 'AWD_INJECT_STORY') return;
+
+    const story = event.data.story;
+    if (!story) return;
+
+    // --- Locate the story textarea ---
+    // AWD uses a <textarea> for story input; adjust selector if needed.
+    const textarea = document.querySelector(
+      'textarea#story-input, ' +
+      'textarea[placeholder*="story"], ' +
+      'textarea[placeholder*="ticket"], ' +
+      'textarea[placeholder*="Jira"], ' +
+      'textarea'
+    );
+
+    if (!textarea) {
+      console.warn('[AWD Companion] Could not find story textarea.');
+      return;
+    }
+
+    // Set value and trigger React/Vue/plain-JS change events
+    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype, 'value'
+    ).set;
+    nativeInputValueSetter.call(textarea, story);
+
+    textarea.dispatchEvent(new Event('input',  { bubbles: true }));
+    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+
+    textarea.focus();
+    textarea.scrollTop = 0;
+
+    console.info('[AWD Companion] Story context injected ✓');
+  });
+
+  // Signal to the side panel that the app is ready to receive messages
+  // (fires after this script tag is parsed, i.e. DOM is complete)
+  window.parent.postMessage({ type: 'AWD_READY' }, '*');
+})();
 </script>
 </body>
 </html>
